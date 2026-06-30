@@ -16,7 +16,8 @@ export function DraftScreen() {
           Choose a Tune
         </div>
         <p style={{ color: 'var(--muted)', margin: '6px 0 0' }}>
-          Cards modify your kart for this run. Pick the one that fits your build.
+          Conditional tunes: small stat shifts plus a triggered effect that fires from your
+          position, the pack, and the corner you&rsquo;re in. Pick the one that fits your build.
         </p>
       </div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>

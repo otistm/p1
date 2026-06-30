@@ -1,4 +1,5 @@
 export * from './contracts';
+export * from './effects';
 export * from './rng';
 export * from './math';
 export * from './derive';

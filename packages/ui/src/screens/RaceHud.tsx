@@ -58,8 +58,18 @@ export function RaceHud({ lap, laps, speedKmh, stamina, board, countdown }: Race
               {r.pos}
             </span>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: hexToCss(r.colorHex) }} />
-            <span style={{ flex: 1, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>
-              {r.name}
+            <span
+              style={{
+                flex: 1,
+                fontWeight: r.me ? 800 : 600,
+                color: r.me ? 'var(--cyan)' : undefined,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 120,
+              }}
+            >
+              {r.me ? `${r.name} (you)` : r.name}
             </span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--muted)' }}>
               {r.gap}

@@ -17,8 +17,21 @@ const PREFERS_REDUCED_MOTION =
 
 function ShowroomConnected() {
   const save = useGame((s) => s.save);
+  const phase = useGame((s) => s.phase);
   const visual = visualFor(save);
-  return <ShowroomKart track={SUNSET_DERBY} visual={visual} orbit={!PREFERS_REDUCED_MOTION} />;
+  // In the garage we hold a fixed 3/4 view (and frame a touch closer) so the build
+  // screen's leader lines stay pinned to the kart's parts.
+  const inGarage = phase === 'garage';
+  return (
+    <ShowroomKart
+      track={SUNSET_DERBY}
+      visual={visual}
+      orbit={!PREFERS_REDUCED_MOTION && !inGarage}
+      angle={-0.92}
+      radius={inGarage ? 8 : 9}
+      height={inGarage ? 3.5 : 4.2}
+    />
+  );
 }
 
 function RaceFieldConnected() {

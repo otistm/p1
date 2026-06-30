@@ -3,7 +3,7 @@ import type { Loadout } from '@grid/content';
 
 export type GamePhase = 'title' | 'garage' | 'draft' | 'training' | 'race' | 'results';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Durable, persisted player profile (the meta progression). */
 export interface PlayerSave {
@@ -26,6 +26,8 @@ export interface BuildSnapshot {
   colorHex: number;
   stats: KartStats;
   rating: number;
+  /** Drafted card ids this build raced with, so ghosts replay their triggered effects. */
+  cardIds: string[];
   ts: number;
 }
 

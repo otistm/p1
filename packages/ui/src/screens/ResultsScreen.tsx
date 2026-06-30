@@ -49,7 +49,7 @@ export function ResultsScreen() {
                   <td className="display" style={{ padding: '9px 8px', borderBottom: '1px solid var(--line)', fontSize: 20, width: 42 }}>
                     {r.rank}
                   </td>
-                  <td style={{ padding: '9px 8px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
+                  <td style={{ padding: '9px 8px', borderBottom: '1px solid var(--line)', fontSize: 14, fontWeight: r.id === 'player' ? 800 : 400, color: r.id === 'player' ? 'var(--cyan)' : undefined }}>
                     <span
                       style={{
                         width: 12,
@@ -61,7 +61,7 @@ export function ResultsScreen() {
                         background: hexToCss(colorHex ?? 0xffffff),
                       }}
                     />
-                    {r.name}
+                    {r.id === 'player' ? `${r.name} (you)` : r.name}
                   </td>
                   <td
                     className="mono"

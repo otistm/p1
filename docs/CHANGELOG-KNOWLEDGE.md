@@ -2,6 +2,57 @@
 
 Relay log — what changed in `docs/`, so the team stays in sync. Newest at top.
 
+- **2026-06-30 (fix: leaderboard readability)** — The "race placement looks wrong" report was
+  a naming collision, not a ranking bug: async ghosts are the player's past builds and shared
+  the player's name, so the board showed multiple identical "Comet" rows. Fix: ghosts get a
+  ` (ghost N)` suffix (`packages/game/src/snapshots.ts`) and the HUD/results mark the player
+  as `name (you)` in cyan (`RaceHud.tsx`, `ResultsScreen.tsx`). Added a `logic.test.ts` case
+  asserting unique entrant names with ghosts present. ADR recorded.
+- **2026-06-30 (feature: conditional racing cards)** — Cards can now carry deterministic
+  **triggered effects** evaluated in-sim against spatial/positional context. New
+  `@grid/sim/effects.ts` (kinds, `EffectContext`, spatial `ZONE`s, pure `evaluateEffects`
+  → modifier bag); `racer.ts`/`engine.ts` apply the bag (speed/steer/lateral line/collision)
+  with a per-racer seeded effect RNG and per-sub-step ranking; `CardSchema` gained
+  `effect`/`trigger`/`effectText`/`archetype`; 7 Phase-1 cards authored (+6 inert Phase-2
+  scaffolds); effects attached to player/ghosts/rivals (`effectsFromCardIds`), `BuildSnapshot`
+  gained `cardIds`, `SAVE_VERSION` 1→2 + migration; draft UI renders Trigger→Effect. Docs:
+  new `cards-proximity-conditional.md` (design + TD review), updated `sim-physics.md`
+  ("Card effects + spatial zones"), `economy-cards.md`, `content-schema.md`; ADR added.
+  Tests: `effects.test.ts` (14) + determinism/absent-effects cases in `engine.test.ts`; the
+  season harness gained an effects on/off balance pass (net-neutral win%, +overtakes).
+- **2026-06-30 (balance finding: season difficulty curve)** — New experience harness
+  `tools/diag/season.ts` ran ~2,250 races (player vs scaled rival field across the 3 cups).
+  Findings: (1) the AI field is fun — ~0.3–0.5s winning margins, photo finishes in ~24–41% of
+  races, ~18 overtakes each; (2) parts alone never compete — a starter build (OVR 193) finishes
+  **last in 100%** of parts-only races; tuning parts only narrows the gap, never the place;
+  (3) training + cards is the real lever — a developed player climbs 193→241→290→351 OVR and
+  wins 70% of Rookie Cups; (4) **the season outruns one playthrough** — developed win% collapses
+  70%→6%→0% as rivalScale ramps (×1→×1.28→×1.6), so the championship reads as multi-season meta
+  progression. Vortex (all-rounder) still over-wins, matching the prior balance note. Summary
+  canvas: `canvases/race-experience.canvas.tsx`.
+- **2026-06-30 (sim fix: player won races they didn't)** — Race results/leaderboard showed the
+  player winning when they were actually behind. Root cause: `finishTime` was the fixed step's
+  end time, so all karts crossing the line within the same 1/60 s tick recorded an *identical*
+  finish time, and `rank()`'s tie-break fell through to the racers' array order — the player is
+  always entrant index 0, so they won every photo finish. Fix: record a sub-step crossing time
+  (`ctx.time - (overshoot/alongThisStep)*dt`) so finishers are ordered by when they truly crossed,
+  and tie-break equal times by `prog`. Deterministic + frame-batching invariant (engine always
+  sub-steps `FIXED_DT`). Added a regression test (identical-kart packs across seeds: order must
+  follow time-then-progress, never index). See `sim-physics.md` → "Finish ordering".
+- **2026-06-30 (render fix: wheels spun backward)** — Kart wheels rolled the wrong way in
+  both the showroom and races. Wheel geometry rolls about local +x, and with the nose at -z a
+  *positive* x-roll drives the tops backward (+z). Both render sites used positive spin
+  (`ShowroomKart` `+= dt*0.4`, `RaceField` `s.rotation.x = spin` from the sim's
+  forward-growing `wheelSpin`). Fix: negate the applied x-roll at both sites (sim semantics
+  unchanged — `wheelSpin` still tracks forward distance).
+- **2026-06-30 (UX redesign: garage build screen)** — Replaced the garage's stacked parts-list
+  + stat-card panel with a "blueprint" over the live showroom kart: per-slot callouts pinned
+  around the kart with SVG leader lines pointing at the actual part, each opening an in-place
+  popover of owned options with signed stat-delta chips (downsides in red) so every trade-off
+  reads at a glance. `ShowroomKart` now takes `angle`/`radius`/`height` and holds a fixed 3/4
+  view when `orbit=false`; `App` passes `orbit=false` + closer framing in the `garage` phase so
+  the leader-line anchors (a single tunable `LAYOUT` table of viewport-% targets) stay pinned.
+  Verified in-browser end-to-end (open/equip/stat-update). See `DECISIONS.md` 2026-06-30.
 - **2026-06-29 (render fix: karts jump f/b — ROOT CAUSE)** — The real cause of the "karts
   jump forward/back" report: the ~15 Hz HUD state shared a React context with the engine, so
   every HUD tick re-rendered the 3D `RaceField`, whose parent passed a fresh `visualsById`

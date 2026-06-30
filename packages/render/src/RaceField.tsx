@@ -64,7 +64,9 @@ export function RaceField({ engine, visualsById, running }: RaceFieldProps) {
       k.fl.rotation.y = steer;
       k.fr.rotation.y = steer;
       const spin = lerp(rc.prevWheelSpin, rc.wheelSpin, a);
-      for (const s of k.spinners) s.rotation.x = spin;
+      // Sim wheelSpin grows with forward distance; negate so the tops roll toward the
+      // nose (-z) instead of backward.
+      for (const s of k.spinners) s.rotation.x = -spin;
     }
 
     const p = racers[playerIndex];

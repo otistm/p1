@@ -9,7 +9,7 @@ import {
   type Loadout,
   type Slot,
 } from '@grid/content';
-import type { GamePhase, PlayerSave, SeasonState } from './types';
+import type { BuildSnapshot, GamePhase, PlayerSave, SeasonState } from './types';
 import { SAVE_VERSION } from './types';
 import { applyTraining } from './season';
 import { initialSeason, beginRound } from './season';
@@ -171,6 +171,18 @@ export const useGame = create<GameStore>()(
       storage: createJSONStorage(() => localStorage),
       // Only the durable profile is persisted; runs are fresh each load.
       partialize: (s) => ({ save: s.save }),
+      // v1 -> v2: snapshots gained `cardIds` (so ghosts replay their triggered effects).
+      migrate: (persisted, _version) => {
+        const state = (persisted ?? {}) as { save?: PlayerSave };
+        if (state.save && Array.isArray(state.save.pastBuilds)) {
+          state.save.pastBuilds = state.save.pastBuilds.map((b) => {
+            const old = b as Omit<BuildSnapshot, 'cardIds' | 'v'> & { v?: number; cardIds?: string[] };
+            return { ...old, v: 2, cardIds: old.cardIds ?? [] };
+          });
+          state.save.version = SAVE_VERSION;
+        }
+        return state;
+      },
     },
   ),
 );

@@ -32,14 +32,40 @@ export function CardView({ card, onPick, disabled }: CardViewProps) {
     >
       <div
         style={{
-          fontSize: 10,
-          letterSpacing: 2,
-          textTransform: 'uppercase',
-          fontWeight: 700,
-          color: rc,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 6,
         }}
       >
-        {card.rarity}
+        <span
+          style={{
+            fontSize: 10,
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            color: rc,
+          }}
+        >
+          {card.rarity}
+        </span>
+        {card.archetype && (
+          <span
+            style={{
+              fontSize: 9,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              fontWeight: 700,
+              padding: '2px 7px',
+              borderRadius: 999,
+              background: 'rgba(255,255,255,.06)',
+              border: '1px solid rgba(255,255,255,.14)',
+              color: 'var(--muted)',
+            }}
+          >
+            {card.archetype}
+          </span>
+        )}
       </div>
       <div className="display" style={{ fontSize: 22, margin: '4px 0 10px' }}>
         {card.name}
@@ -67,7 +93,41 @@ export function CardView({ card, onPick, disabled }: CardViewProps) {
           );
         })}
       </div>
-      {card.special && (
+      {card.effect && (card.trigger || card.effectText) && (
+        <div
+          style={{
+            marginBottom: 8,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: 'rgba(43,217,255,.07)',
+            border: '1px solid rgba(43,217,255,.22)',
+          }}
+        >
+          {card.trigger && (
+            <div style={{ fontSize: 11, lineHeight: 1.35 }}>
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  fontWeight: 700,
+                  color: 'var(--muted)',
+                }}
+              >
+                When{' '}
+              </span>
+              <span style={{ color: 'var(--ink)' }}>{card.trigger}</span>
+            </div>
+          )}
+          {card.effectText && (
+            <div style={{ fontSize: 11, lineHeight: 1.35, marginTop: 2 }}>
+              <span style={{ color: 'var(--cyan)', fontWeight: 700 }}>&rarr; </span>
+              <span style={{ color: 'var(--ink)' }}>{card.effectText}</span>
+            </div>
+          )}
+        </div>
+      )}
+      {card.special && !card.effect && (
         <div style={{ fontSize: 12, color: 'var(--cyan)', marginBottom: 6 }}>{card.special}</div>
       )}
       <div style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic', lineHeight: 1.4 }}>

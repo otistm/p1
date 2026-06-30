@@ -1,4 +1,4 @@
-import { STAT_KEYS, type KartStats } from '@grid/sim';
+import { STAT_KEYS, type CardEffect, type KartStats } from '@grid/sim';
 import {
   addStats,
   CARDS_BY_ID,
@@ -19,6 +19,16 @@ export function cardMods(cardIds: string[]): KartStats {
     if (card) acc = addStats(acc, card.mods);
   }
   return acc;
+}
+
+/** The triggered in-sim effects carried by a set of drafted cards (cards without one skip). */
+export function effectsFromCardIds(cardIds: string[]): CardEffect[] {
+  const out: CardEffect[] = [];
+  for (const id of cardIds) {
+    const card = CARDS_BY_ID[id];
+    if (card?.effect) out.push(card.effect);
+  }
+  return out;
 }
 
 /**

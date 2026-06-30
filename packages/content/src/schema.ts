@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { STAT_KEYS, type KartStats } from '@grid/sim';
+import { CARD_EFFECT_KINDS, STAT_KEYS, type CardEffectKind, type KartStats } from '@grid/sim';
 
 /** Kart part slots. A loadout has exactly one part per slot. */
 export const SLOTS = ['chassis', 'engine', 'tires', 'brakes', 'gearing', 'aero', 'ballast'] as const;
@@ -26,13 +26,32 @@ export const PartSchema = z.object({
 });
 export type Part = z.infer<typeof PartSchema>;
 
+/**
+ * Zod mirror of the sim's `CardEffect`. A card may carry a triggered in-sim effect (proximity/
+ * position driven) in addition to (or instead of) a small flat `mods` bump. Params are a flat
+ * numeric record so tuning a card is a data change; only a new `kind` needs an engine handler.
+ */
+export const CardEffectSchema = z.object({
+  kind: z.enum(CARD_EFFECT_KINDS as unknown as [CardEffectKind, ...CardEffectKind[]]),
+  params: z.record(z.number()).optional(),
+});
+export type CardEffect = z.infer<typeof CardEffectSchema>;
+
 export const CardSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   rarity: z.enum(RARITIES),
   theme: z.enum(STAT_KEYS),
   mods: PartialStatsSchema,
-  /** Optional descriptive special (future: conditional in-sim effects). */
+  /** Optional triggered in-sim effect (see docs/cards-proximity-conditional.md). */
+  effect: CardEffectSchema.optional(),
+  /** Human-readable trigger condition shown in the draft UI. */
+  trigger: z.string().optional(),
+  /** Human-readable effect description shown in the draft UI. */
+  effectText: z.string().optional(),
+  /** Short archetype tag (e.g. "Traffic", "Leader") for the draft UI. */
+  archetype: z.string().optional(),
+  /** Optional legacy descriptive special. */
   special: z.string().optional(),
   flavor: z.string(),
 });

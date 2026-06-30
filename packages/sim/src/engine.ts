@@ -35,7 +35,11 @@ export class RaceEngine implements IRaceEngine {
     this.track = new Track(config.track);
     this.laps = config.track.laps;
     const rng = makeRng(hashSeed(config.seed, config.entrants.length, config.track.points.length));
-    this.racers = config.entrants.map((e) => new Racer(e, derive(e.stats)));
+    // Each racer gets a dedicated seeded RNG for effect rolls (drawn only on fixed sub-steps),
+    // salted by index so identical decks still diverge and frame batching stays invariant.
+    this.racers = config.entrants.map(
+      (e, i) => new Racer(e, derive(e.stats), makeRng(hashSeed(config.seed, i, 0xeffec7))),
+    );
 
     // Grid: staggered rows of two behind the line, small lateral spread.
     const len = this.track.length;
@@ -73,6 +77,9 @@ export class RaceEngine implements IRaceEngine {
     while (this.acc >= FIXED_DT) {
       this.acc -= FIXED_DT;
       this.time += FIXED_DT;
+      // Refresh ranks every fixed step (not once per frame) so rank-triggered effects
+      // (Clean Air, Desperation Draft, Vanguard) are invariant to frame batching.
+      this.rank();
       let allDone = true;
       for (const rc of this.racers) {
         if (!rc.finished) {
@@ -99,10 +106,17 @@ export class RaceEngine implements IRaceEngine {
     this.rank();
   }
 
-  /** Rank by finish time (finished first), then by progress. Stable, index-based. */
+  /**
+   * Rank by finish time (finished first), then by progress. The progress tie-break also
+   * settles the rare case of two karts sharing an identical sub-step finish time, so the
+   * order never depends on entrant array position (which used to hand the player, always
+   * index 0, undeserved photo-finish wins).
+   */
   private rank(): void {
     const sorted = [...this.racers].sort((a, b) => {
-      if (a.finished && b.finished) return a.finishTime - b.finishTime;
+      if (a.finished && b.finished) {
+        return a.finishTime !== b.finishTime ? a.finishTime - b.finishTime : b.prog - a.prog;
+      }
       if (a.finished) return -1;
       if (b.finished) return 1;
       return b.prog - a.prog;

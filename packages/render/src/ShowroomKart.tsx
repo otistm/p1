@@ -8,12 +8,29 @@ interface ShowroomKartProps {
   visual: KartVisual;
   /** Disable the slow camera orbit (reduced motion / when an overlay needs a still). */
   orbit?: boolean;
+  /** Fixed camera azimuth (radians) used when orbit is disabled — frames the build view. */
+  angle?: number;
+  /** Camera distance from the kart. */
+  radius?: number;
+  /** Camera height above the kart. */
+  height?: number;
 }
 
-/** A single kart on the start line under a slow orbiting camera — the garage view. */
-export function ShowroomKart({ track, visual, orbit = true }: ShowroomKartProps) {
+/**
+ * A single kart on the start line. By default the camera slowly orbits (title showcase).
+ * When `orbit` is false it holds a fixed azimuth so the garage build view can pin leader
+ * lines to known on-screen part positions.
+ */
+export function ShowroomKart({
+  track,
+  visual,
+  orbit = true,
+  angle: fixedAngle = -0.92,
+  radius = 9,
+  height = 4.2,
+}: ShowroomKartProps) {
   const { camera } = useThree();
-  const angle = useRef(0);
+  const angle = useRef(fixedAngle);
 
   const { kart, pose } = useMemo(() => {
     const t = new Track(track);
@@ -27,14 +44,15 @@ export function ShowroomKart({ track, visual, orbit = true }: ShowroomKartProps)
 
   useFrame((_, dt) => {
     if (orbit) angle.current += dt * 0.3;
-    const r = 9;
+    else angle.current = fixedAngle;
     camera.position.set(
-      pose.x + Math.cos(angle.current) * r,
-      pose.y + 4.2,
-      pose.z + Math.sin(angle.current) * r,
+      pose.x + Math.cos(angle.current) * radius,
+      pose.y + height,
+      pose.z + Math.sin(angle.current) * radius,
     );
     camera.lookAt(pose.x, pose.y + 0.6, pose.z);
-    for (const s of kart.spinners) s.rotation.x += dt * 0.4;
+    // Negative x-roll spins the wheel tops toward the nose (-z) = rolling forward.
+    for (const s of kart.spinners) s.rotation.x -= dt * 0.4;
   });
 
   return <primitive object={kart.group} />;

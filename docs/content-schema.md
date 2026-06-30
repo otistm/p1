@@ -8,9 +8,12 @@ by **Zod** in `@grid/content`. Adding content must not require engine changes.
 - **PartSchema** — `{ id, name, slot, rarity, stats: Partial<KartStats>, special?,
   cosmeticModelId? }`. `slot` ∈ chassis | engine | tires | brakes | gearing | aero |
   ballast.
-- **CardSchema** — `{ id, name, rarity, theme, mods: StatMod[], special?, flavor }`.
-  A `StatMod` targets a rating or a derived attribute with an additive/multiplicative
-  amount and an optional condition (e.g. `lastLap`).
+- **CardSchema** — `{ id, name, rarity, theme, mods: Partial<KartStats>, effect?,
+  trigger?, effectText?, archetype?, special?, flavor }`. `effect` is a `CardEffect`
+  `{ kind, params?: Record<string, number> }` — a Zod mirror of the sim's
+  `CardEffectKind` union (the canonical kinds live in `@grid/sim`). `trigger`/`effectText`
+  are the human-readable strings the draft UI renders; `archetype` is a short tag. A card
+  may have both a small flat `mods` and an `effect`.
 - **TrackSchema** — conforms to `@grid/sim`'s `TrackDef` `{ id, name, points, width,
   laps, samplesPerSegment? }` plus presentation metadata (theme, scenery seed).
 - **CosmeticSchema** — `{ id, name, kind, rarity }`, `kind` ∈ livery | wheels | decal |

@@ -32,6 +32,15 @@ export const STAT_LABEL: Record<string, string> = {
   wit: 'Wit',
 };
 
+/** One-line explanation of what each rating does in the sim (shown on hover). */
+export const STAT_DESC: Record<string, string> = {
+  speed: 'Straight-line top speed — your cap on the long flat-out sections.',
+  stamina: 'Energy reserve — sustains your pace; run dry and you fade late in the race.',
+  power: 'Corner-exit punch — acceleration, braking force, and grip out of the bends.',
+  guts: 'Heart — a final-lap surge, and speed held even when stamina runs low.',
+  wit: 'Racecraft — corner-reading accuracy, steering finesse, and fuel economy.',
+};
+
 /** Livery palette offered in the garage. */
 export const LIVERY = [
   { hex: 0xe74c3c, name: 'Crimson' },

@@ -9,6 +9,7 @@
  * Layered stat model:
  *   Parts  ->  KartStats (5 legible ratings)  ->  DerivedAttributes (physics)
  */
+import type { CardEffect } from './effects';
 
 /** The five legible, trainable/draftable ratings (Umamusume-inspired, kart-tuned). */
 export const STAT_KEYS = ['speed', 'stamina', 'power', 'guts', 'wit'] as const;
@@ -68,6 +69,8 @@ export interface Entrant {
   colorHex: number;
   stats: KartStats;
   isPlayer?: boolean;
+  /** Optional triggered card effects evaluated inside the sim. Absent = legacy behaviour. */
+  effects?: CardEffect[];
 }
 
 /** Everything needed to deterministically resolve a race. */

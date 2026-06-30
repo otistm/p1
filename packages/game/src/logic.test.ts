@@ -64,4 +64,19 @@ describe('race assembly', () => {
     const r2 = RaceEngine.resolve(assembleRaceConfig(save(), season, 555));
     expect(r1).toEqual(r2);
   });
+
+  it('gives every entrant a unique display name, even with player ghosts', () => {
+    // Ghosts are the player's own past builds (same name); they must not collide with the
+    // live player on the leaderboard, or it looks like the player is winning when a ghost is.
+    const s = save();
+    s.pastBuilds = [
+      { v: 2, id: 'b1', name: s.name, colorHex: s.liveryHex, stats: { speed: 50, stamina: 50, power: 50, guts: 50, wit: 50 }, rating: 250, cardIds: [], ts: 1 },
+      { v: 2, id: 'b2', name: s.name, colorHex: s.liveryHex, stats: { speed: 55, stamina: 45, power: 52, guts: 48, wit: 51 }, rating: 251, cardIds: [], ts: 2 },
+    ];
+    const cfg = assembleRaceConfig(s, initialSeason(), 999);
+    const names = cfg.entrants.map((e) => e.name);
+    expect(new Set(names).size).toBe(names.length);
+    // The lone un-suffixed name is the live player.
+    expect(names.filter((n) => n === s.name)).toEqual([s.name]);
+  });
 });
