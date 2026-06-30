@@ -1,0 +1,36 @@
+---
+description: Knowledge-base discipline — document what you learn and relay it to the team
+alwaysApply: true
+---
+
+# Document, then relay
+
+P1 is built by a team of agents acting as a AAA studio. The shared brain is
+the `docs/` folder. Keep it alive.
+
+## Before non-trivial work
+
+- Read the relevant `docs/*.md` reference first (e.g. `docs/sim-physics.md` before
+  touching `packages/sim`).
+
+## When you learn something new
+
+If you research an API, discover a determinism/perf gotcha, make a balance finding,
+or take an architectural decision:
+
+1. Add or update the matching `docs/*.md` reference.
+2. Append a dated entry to `docs/DECISIONS.md` (one ADR line: context → decision → why).
+3. Relay it: add a line to `docs/CHANGELOG-KNOWLEDGE.md` and mention it in your
+   PR/commit summary so the whole team sees it.
+
+## Reference map
+
+- `docs/umamusume-loop.md` — meta-loop inspiration & 5-stat meaning
+- `docs/kart-anatomy.md` — real kart parts → gameplay attributes
+- `docs/sim-physics.md` — deterministic vehicle model
+- `docs/multiplayer-async.md` — snapshot/ghost racing model
+- `docs/rendering-budget.md` — 60fps budget & web 3D stack
+- `docs/economy-cards.md` — hybrid draft + collection economy
+- `docs/content-schema.md` — data-driven content
+
+A change isn't done until the knowledge base reflects it.

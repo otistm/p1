@@ -1,0 +1,144 @@
+:root {
+  --bg: #14171f;
+  --panel: #1e232e;
+  --panel2: #252b38;
+  --line: #333b4a;
+  --ink: #eef1f6;
+  --muted: #8b93a3;
+  --orange: #ff6a2b;
+  --cyan: #2bd9ff;
+  --green: #4ee08a;
+  --red: #ff4d6d;
+  --purple: #b07bff;
+  --speed: #2bd9ff;
+  --stamina: #4ee08a;
+  --power: #ff6a2b;
+  --guts: #ff4d6d;
+  --wit: #b07bff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+canvas#scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+.mono {
+  font-family: 'Space Mono', monospace;
+}
+.display {
+  font-family: 'Anton', sans-serif;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 10;
+}
+
+.card {
+  background: rgba(30, 35, 46, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.btn {
+  font-family: 'Anton', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 26px;
+  font-size: 20px;
+  color: #101218;
+  background: var(--orange);
+  transition:
+    filter 0.12s,
+    transform 0.06s;
+}
+.btn:hover {
+  filter: brightness(1.08);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn.cyan {
+  background: var(--cyan);
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.btn.ghost:hover {
+  background: var(--panel2);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.panel {
+  background: rgba(30, 35, 46, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.float {
+  animation: fl 3s ease-in-out infinite;
+}
+@keyframes fl {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}

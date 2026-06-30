@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "noEmit": true,
+    "composite": false,
+    "types": ["vite/client", "node"]
+  },
+  "references": [
+    { "path": "../packages/sim" },
+    { "path": "../packages/content" },
+    { "path": "../packages/game" },
+    { "path": "../packages/render" },
+    { "path": "../packages/ui" },
+    { "path": "../packages/audio" }
+  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}

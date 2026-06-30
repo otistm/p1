@@ -1,0 +1,35 @@
+---
+description: Determinism contract for the simulation package
+globs: packages/sim/**/*.ts
+alwaysApply: false
+---
+
+# The sim must be deterministic
+
+`@grid/sim` is the source of truth for race outcomes. Same `RaceConfig` + `seed`
+=> identical result, on any machine. This enables async snapshot racing and
+server-side re-simulation. ESLint enforces parts of this; you own the rest.
+
+## Rules
+
+- No wall clock. Never use `Date.now()`, `performance.now()`, or `new Date()`.
+  Time is always passed in (`step(dt)`), and the engine integrates fixed `FIXED_DT`.
+- No unseeded randomness. Never call `Math.random()`. Use the `Rng` threaded from
+  `makeRng(seed)`.
+- No DOM and no `three` imports. The sim is pure and headless.
+- Deterministic iteration order. Iterate arrays by index; never iterate `Set`/`Map`
+  insertion-order-dependently across hosts, and never sort with unstable comparisons.
+- Fixed timestep only. Accumulate wall dt and consume it in `FIXED_DT` slices.
+
+```typescript
+// ❌ BAD — nondeterministic
+const jitter = Math.random() * 6 - 3;
+const t = Date.now();
+
+// ✅ GOOD — seeded + injected
+const jitter = rng() * 6 - 3;
+function step(dt: number) { this.acc += dt; while (this.acc >= FIXED_DT) { ... } }
+```
+
+If you add a new random or time-dependent behavior, thread the `Rng`/time through —
+do not reach for globals.

@@ -1,0 +1,35 @@
+---
+description: 60fps performance budget for the render package
+globs: packages/render/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Hold 60fps
+
+Target: a locked 60fps (16.6ms frame) on a mid-tier 2023 laptop GPU. The race must
+never stutter.
+
+## Budget
+
+- Draw calls: keep the racing scene under ~150 draw calls. Use `InstancedMesh`
+  (drei `<Instances>`) for repeated geometry (trees, rocks, crowd, curbs).
+- Build kart and track meshes once; never allocate geometry/materials per frame.
+- No `new` of THREE objects inside `useFrame`. Reuse scratch `Vector3`/`Quaternion`.
+- Textures: KTX2/Basis compressed; geometry: Draco-compressed glTF.
+- Use LOD (drei `<Detailed>`) for distant props.
+- Shadows: one shadow-casting directional light; cap shadow map at 2048.
+- Post FX kept cheap (bloom + light motion blur); gate heavy passes behind a quality
+  setting and honor `prefers-reduced-motion`.
+
+## Pattern
+
+```tsx
+// ❌ BAD — allocates every frame
+useFrame(() => { mesh.position.copy(new THREE.Vector3(x, 0.5, z)); });
+
+// ✅ GOOD — reuse + read sim snapshot
+const v = useMemo(() => new THREE.Vector3(), []);
+useFrame(() => { mesh.position.set(state.x, 0.5, state.z); });
+```
+
+Rendering reads sim state; it never drives game logic.

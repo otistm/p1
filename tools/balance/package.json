@@ -1,0 +1,13 @@
+{
+  "name": "@grid/balance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx run.ts"
+  },
+  "dependencies": {
+    "@grid/content": "*",
+    "@grid/sim": "*"
+  }
+}

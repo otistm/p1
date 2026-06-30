@@ -1,0 +1,18 @@
+---
+description: Core TypeScript and content conventions for P1
+alwaysApply: true
+---
+
+# Coding standards
+
+- TypeScript strict. No `any` (ESLint errors). Prefer precise types and discriminated
+  unions over loose objects.
+- Respect package boundaries and the dependency direction:
+  `content → sim (types)`, `game → sim + content`, `render → sim + content`,
+  `ui → game`, `app → all`. Never import `react`/`three`/DOM into `@grid/sim`.
+- All external/content data is validated with Zod at the boundary, then trusted as a
+  typed value internally. New content must conform to a schema in `@grid/content`.
+- Keep modules small and single-purpose. Co-locate tests as `*.test.ts`.
+- Comments explain intent and trade-offs, not what the code obviously does.
+- Game logic is data-driven: adding a track, part, card, or cosmetic should be a data
+  change validated by a schema, not an engine change.
