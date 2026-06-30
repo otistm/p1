@@ -45,13 +45,48 @@ Five ratings → physics quantities (tunable constants):
 4. **Speed target** = min(corner speed from `maxCurvAhead` & `latGrip` & `judge`,
    `topSpeed × fade × form × (surge if last lap)`); approach via `accel`/`brake`.
 5. Drain energy ∝ effort²×`drainEff`; integrate position; clamp to road via an edge wall.
-6. Advance along-track progress; detect lap/finish.
+6. **Re-project the (clamped) position onto the centerline** → lap-aware race progress
+   (see below); detect lap/finish.
 7. Smooth visual roll/pitch/steer/wheelSpin (render-only fields).
 
 `resolveCollisions` does positional separation + equal-mass restitution impulses so
 karts bounce instead of overlapping. Contact distance is the **sum of the two karts'
 collision radii** and the impulse (and its cap) scale by the harder hitter's
 `impactScale`, so effects can widen a hit box or shove harder (see below).
+
+## Race progress + live standings (`prog`)
+
+The leaderboard ranks by `prog` (`rank()` sorts finished-first, then `prog` desc). `prog`
+must be **where the kart actually is on the track** — the same position the renderer draws
+— or the board and the track disagree.
+
+We compute it the way racing games do (verified against Facepunch's `s&box`
+`RaceStandings.cs`, plus Unreal/Godot references): **re-project the kart's actual `(x,z)`
+onto the centerline every fixed step**, normalise to `raw ∈ [0,length)`, then accumulate a
+**seam-corrected delta** into `cp`:
+
+```
+delta = raw - lastRaw
+if delta < -length/2: delta += length; lap++      // crossed start/finish forward
+if delta >  length/2: delta -= length; lap--      // small backward wobble across the seam
+cp += delta;  prog = cp                            // == lap*length + raw
+```
+
+The grid sits *behind* the line, so `place()` anchors `lap = round((cp0 - raw0)/length)`
+(= `-1` on the grid) to keep `prog == cp0` from tick one.
+
+**Why not accumulate movement (the old bug).** The previous code integrated the along-track
+component of each step's displacement (`Δpos · trackTangent`) into `cp` — dead reckoning. It
+silently dropped every displacement the velocity integrator didn't author: **collision
+shoves** (`resolveCollisions` edits `x,z` *after* the step), wall slides, lane changes. Over
+a race that drifted **up to ~85 m** from the true position and the board disagreed with the
+track on **~96 % of ticks** (avg ~3 inverted pairs/tick; the player shown in the wrong place
+up to ~60 % of ticks — see `tools/diag/standings.ts`). Re-projecting the rendered position
+each tick cut that to ~11 % of ticks / ~0.15 pairs / ~1 % player — and that residual is the
+≤1-tick (16 ms) latency between the engine's mid-step projection and the post-collision
+frame, **below the HUD's poll period**. Guarded by `engine.test.ts` → "keeps the live
+standings glued to the karts actual track positions" (asserts < 1 inverted pair/tick;
+dead reckoning scored ~3.7).
 
 ## Card effects + spatial zones (`effects.ts`)
 
@@ -85,7 +120,8 @@ See `effects.test.ts` (per-handler) and `engine.test.ts` (determinism with effec
 
 `finishTime` is recorded as a **sub-step** crossing time, not the step's end time: when
 `cp` passes the finish line we back out the fraction of the step already beyond the line
-(`overshoot / alongThisStep`) and subtract it from `ctx.time`. Several karts routinely
+(`overshoot / deltaThisStep`, where `delta` is the seam-corrected progress added this step)
+and subtract it from `ctx.time`. Several karts routinely
 cross within one 1/60 s step; without this they'd share an identical `finishTime` and the
 sort would fall back to **entrant array order** — and since the player is always entrant
 index 0, the player won every photo finish for free. `rank()` also tie-breaks equal finish

@@ -2,6 +2,19 @@
 
 One line per decision: context → decision → why. Newest at top.
 
+- **2026-06-30 — Rank by re-projected track position, not dead-reckoned distance.** Bug: the
+  live board showed karts in different places than the track and didn't update as karts
+  passed. Root cause (measured, not guessed, via `tools/diag/standings.ts`): `prog`/`cp`
+  accumulated the along-track component of each step's *movement* (dead reckoning), so it
+  missed collision shoves (`resolveCollisions` edits `x,z` after the step), wall slides, and
+  lane changes — drifting up to ~85 m from the real position and disagreeing with the track
+  on ~96 % of ticks (player mis-placed up to ~60 %). Decision: every fixed step, re-project
+  the kart's actual `(x,z)` onto the centerline and accumulate a **seam-corrected delta**
+  into `cp` (`prog = lap*length + raw`), the industry-standard measure (verified vs Facepunch
+  `s&box` `RaceStandings.cs`, Unreal/Godot refs). Why: the board is now derived from the same
+  position the renderer draws, so it matches the track — residual disagreement is the ≤1-tick
+  (16 ms) projection-phase latency, below the HUD poll period. Guarded by a new
+  `engine.test.ts` case; HUD poll bumped 15→30 Hz for snappier updates.
 - **2026-06-30 — Disambiguate ghost names + mark the player on the leaderboard.** Bug: the
   HUD board and results showed several identical "Comet" rows because async ghosts are the
   player's own past builds (same name), so it looked like the player was P1/P2 when those

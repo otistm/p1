@@ -56,6 +56,8 @@ export class Racer {
   lap = 0;
   prog = 0;
   cp = 0;
+  /** Last projected arc-length in [0,length), for seam-corrected lap accumulation. */
+  private lastRaw = 0;
   finished = false;
   finishTime = 0;
   rank = 0;
@@ -102,12 +104,19 @@ export class Racer {
     this.vz = 0;
     this.cp = cp0;
     this.prog = cp0;
-    this.hint = track.project(x, z, 0).idx;
+    const pr0 = track.project(x, z, 0);
+    this.hint = pr0.idx;
+    // Anchor seam-corrected progress to the grid pose: the grid sits behind the start/finish
+    // line, so cp0 is a small negative number and the raw arc-length is near the end of the
+    // lap. lap0 = round((cp0 - raw)/length) recovers the matching lap index (-1 on the grid),
+    // keeping prog == lap*length + raw consistent with cp0 from the very first tick.
+    const len = track.length;
+    this.lastRaw = ((pr0.s % len) + len) % len;
+    this.lap = Math.round((cp0 - this.lastRaw) / len);
     this.energy = this.d.energyMax;
     this.finished = false;
     this.finishTime = 0;
     this.rank = 0;
-    this.lap = 0;
     this.over = 0;
     this.roll = 0;
     this.pitch = 0;
@@ -329,8 +338,6 @@ export class Racer {
     this.energy = Math.max(0, this.energy - drain * dt);
 
     // Integrate.
-    const px = this.x;
-    const pz = this.z;
     this.x += this.vx * dt;
     this.z += this.vz * dt;
 
@@ -350,13 +357,32 @@ export class Racer {
       }
     }
 
-    // Progress = along-track component of movement (robust to bumps & lane changes).
-    const along = (this.x - px) * Math.cos(pr.ang) + (this.z - pz) * Math.sin(pr.ang);
-    this.cp += along;
+    // Race progress = the kart's ACTUAL position projected onto the centerline, lap-aware.
+    // Re-derived from (x,z) every fixed step (the industry-standard measure used by Mario-
+    // Kart-likes and sims alike: progress = laps*length + distanceAlongCenterline, sorted
+    // desc — see docs/sim-physics.md). Accumulating the along-track component of movement
+    // instead silently mis-counts every displacement the velocity integrator didn't author:
+    // collision shoves (resolveCollisions edits x,z after the step), wall slides, lane
+    // changes. That dead-reckoning drifted up to ~85m from the real position and put the
+    // board out of order vs the track on ~96% of ticks. Projecting the rendered position
+    // each tick keeps the standings glued to what the player sees.
+    const len = track.length;
+    const prog = track.project(this.x, this.z, this.hint);
+    this.hint = prog.idx;
+    this.idx = prog.idx;
+    const raw = ((prog.s % len) + len) % len;
+    let delta = raw - this.lastRaw;
+    if (delta < -len * 0.5) {
+      delta += len; // crossed the start/finish seam forward → completed a lap
+      this.lap++;
+    } else if (delta > len * 0.5) {
+      delta -= len; // tiny backward wobble across the seam → undo the phantom lap
+      this.lap--;
+    }
+    this.lastRaw = raw;
+    this.cp += delta;
     this.prog = this.cp;
-    this.idx = pr.idx;
-    this.lap = Math.max(0, Math.floor(this.cp / track.length));
-    const finishLine = ctx.laps * track.length;
+    const finishLine = ctx.laps * len;
     if (this.cp >= finishLine && !this.finished) {
       this.finished = true;
       // Record a sub-step crossing time, not just the step's end time. Many karts can
@@ -364,7 +390,7 @@ export class Racer {
       // one actually passed the line lets a photo finish resolve by who was truly ahead
       // instead of by entrant array order (which always favoured the player at index 0).
       const overshoot = this.cp - finishLine;
-      const frac = along > 1e-6 ? clamp(overshoot / along, 0, 1) : 0;
+      const frac = delta > 1e-6 ? clamp(overshoot / delta, 0, 1) : 0;
       this.finishTime = ctx.time - frac * dt;
     }
 

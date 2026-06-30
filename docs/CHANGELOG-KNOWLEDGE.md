@@ -2,6 +2,17 @@
 
 Relay log — what changed in `docs/`, so the team stays in sync. Newest at top.
 
+- **2026-06-30 (fix: live standings track the karts)** — "Board shows karts in different
+  places than the track / doesn't update as they pass." Data-driven, not a guess: built
+  `tools/diag/standings.ts` to compare the engine's `prog` ordering against the actual
+  projected position over 60 seeds/round — the old dead-reckoned `cp` (accumulated movement,
+  blind to collision shoves & wall slides) drifted ~85 m and disagreed with the track ~96 %
+  of ticks (player mis-placed up to ~60 %). Fix: `racer.ts` now re-projects actual `(x,z)`
+  onto the centerline each fixed step and accumulates a seam-corrected, lap-aware delta
+  (`prog = lap*length + raw`), the standard racing-game measure (s&box/Unreal/Godot). After:
+  ~11 % of ticks / ~1 % player, residual = ≤1-tick latency below the HUD poll. Regression
+  test added (`engine.test.ts`); HUD poll 15→30 Hz. `sim-physics.md` gained a "Race progress
+  + live standings" section; ADR recorded.
 - **2026-06-30 (fix: leaderboard readability)** — The "race placement looks wrong" report was
   a naming collision, not a ranking bug: async ghosts are the player's past builds and shared
   the player's name, so the board showed multiple identical "Comet" rows. Fix: ghosts get a

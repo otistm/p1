@@ -47,18 +47,26 @@ function computeHud(engine: RaceEngine): HudData {
   const racers = engine.racers;
   const player = racers.find((r) => r.isPlayer) ?? racers[0];
   const ranked = [...racers].sort((a, b) => a.rank - b.rank);
-  const leadProg = ranked[0]?.prog ?? 0;
+  const leader = ranked[0];
+  const leadProg = leader?.prog ?? 0;
+  // Convert each kart's along-track distance behind the leader into a time gap using ONE
+  // shared pace, not each kart's own instantaneous speed. Dividing by per-kart speed made
+  // the gaps non-monotonic (a lower-placed kart in a fast moment could read as "closer"
+  // than the kart ahead of it), which looked like the board was wrong. A shared pace keeps
+  // the gaps strictly increasing down the order, matching the positions. Floored so a slow
+  // corner doesn't blow the numbers up.
+  const pace = Math.max(leader?.speed ?? 0, 12);
   const board: BoardRow[] = ranked.map((r) => ({
     pos: r.rank,
     name: r.name,
     colorHex: r.colorHex,
     me: r.isPlayer,
     gap:
-      r === ranked[0]
+      r === leader
         ? ''
         : r.finished
           ? 'fin'
-          : `-${((leadProg - r.prog) / Math.max(r.speed, 6)).toFixed(1)}s`,
+          : `-${Math.max(0, (leadProg - r.prog) / pace).toFixed(1)}s`,
   }));
   return {
     lap: player.lap,
@@ -129,7 +137,9 @@ export function RaceSessionProvider({ children }: { children: ReactNode }) {
         const result = engine.result();
         if (result) finishRace(result);
       }
-    }, 66);
+      // ~30Hz: the standings now track real track positions, so poll fast enough that a
+      // pass shows on the board almost the instant it happens on track (not ~66ms later).
+    }, 33);
     return () => {
       clearInterval(id);
       audio.engineOff();

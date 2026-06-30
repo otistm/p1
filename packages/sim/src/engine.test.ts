@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { RaceEngine } from './engine';
+import { Track } from './track';
 import { FIXED_DT, type Entrant, type RaceConfig, type TrackDef } from './contracts';
 import { makeRng } from './rng';
 
@@ -125,6 +126,60 @@ describe('RaceEngine determinism', () => {
       entrants: config(2024).entrants.map((e) => ({ ...e, effects: [] })),
     };
     expect(RaceEngine.resolve(emptyEffects)).toEqual(plain);
+  });
+
+  it('keeps the live standings glued to the karts actual track positions', () => {
+    // Regression guard for the "board shows karts in different places than the track" bug.
+    // The leaderboard ranks by `prog`; `prog` must track each kart's actual (x,z) position
+    // projected onto the centerline, lap-aware (industry-standard). We re-derive that
+    // projection independently every fixed step and count how often the engine's order
+    // disagrees with it. Dead-reckoned accumulation (the old bug) scored ~3.7 inverted
+    // pairs/tick here; the projection metric must stay near zero. The small residual is the
+    // <=1-tick latency between the engine's mid-step projection and this post-step one.
+    const cfg = config(31337);
+    const track = new Track(cfg.track);
+    const eng = new RaceEngine(cfg);
+    eng.start();
+    const len = track.length;
+    const hint = new Map<string, number>();
+    const proj = new Map<string, { p: number; last: number; on: boolean }>();
+    for (const r of eng.racers) {
+      hint.set(r.id, r.idx);
+      proj.set(r.id, { p: 0, last: 0, on: false });
+    }
+
+    let ticks = 0;
+    let inversions = 0;
+    let guard = 0;
+    while (!eng.over && guard++ < 200_000) {
+      eng.step(FIXED_DT);
+      for (const r of eng.racers) {
+        const pr = track.project(r.x, r.z, hint.get(r.id)!);
+        hint.set(r.id, pr.idx);
+        const raw = ((pr.s % len) + len) % len;
+        const t = proj.get(r.id)!;
+        if (!t.on) {
+          t.p = raw;
+          t.last = raw;
+          t.on = true;
+        } else {
+          let d = raw - t.last;
+          if (d < -len * 0.5) d += len;
+          else if (d > len * 0.5) d -= len;
+          t.p += d;
+          t.last = raw;
+        }
+      }
+      const byRank = [...eng.racers].sort((a, b) => a.rank - b.rank).map((r) => r.id);
+      const byProj = [...eng.racers].sort((a, b) => proj.get(b.id)!.p - proj.get(a.id)!.p).map((r) => r.id);
+      const posProj = new Map(byProj.map((id, i) => [id, i]));
+      for (let i = 0; i < byRank.length; i++)
+        for (let j = i + 1; j < byRank.length; j++)
+          if (posProj.get(byRank[i])! > posProj.get(byRank[j])!) inversions++;
+      ticks++;
+    }
+    const perTick = inversions / Math.max(ticks, 1);
+    expect(perTick).toBeLessThan(1); // dead-reckoning scored ~3.7 here
   });
 
   it('settles the order by crossing time then progress, never by entrant index', () => {
