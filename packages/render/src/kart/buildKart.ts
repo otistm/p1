@@ -23,6 +23,12 @@ export interface KartObject {
   fl: THREE.Group;
   fr: THREE.Group;
   spinners: THREE.Group[];
+  /**
+   * Height of the group origin above the wheel contact patch (= wheel radius). Wheels are
+   * centered at local y=0, so the group must sit this far above the road for the tires to
+   * touch the ground. Varies with tire size (`wheelScale`), so callers read it per kart.
+   */
+  groundOffset: number;
   dispose: () => void;
 }
 
@@ -163,6 +169,7 @@ export function buildKart(visual: KartVisual): KartObject {
     fl,
     fr,
     spinners,
+    groundOffset: r,
     dispose: () => {
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();

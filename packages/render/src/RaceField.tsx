@@ -6,6 +6,9 @@ import { buildKart, type KartObject, type KartVisual } from './kart/buildKart';
 /** Shortest-path angular interpolation (avoids the wrap-around spin at ±π). */
 const lerpAngle = (a: number, b: number, t: number): number => a + wrapAngle(b - a) * t;
 
+/** World height of the road surface (see buildTrack: road verts at y=0.02). */
+const ROAD_Y = 0.02;
+
 interface RaceFieldProps {
   engine: RaceEngine;
   visualsById: Record<string, KartVisual>;
@@ -56,11 +59,15 @@ export function RaceField({ engine, visualsById, running }: RaceFieldProps) {
     for (let i = 0; i < racers.length; i++) {
       const rc: Racer = racers[i];
       const k = karts[i];
-      k.group.position.set(lerp(rc.prevX, rc.x, a), 0.5, lerp(rc.prevZ, rc.z, a));
+      // Rest the wheels on the road: origin sits one wheel-radius above the surface.
+      k.group.position.set(lerp(rc.prevX, rc.x, a), ROAD_Y + k.groundOffset, lerp(rc.prevZ, rc.z, a));
       k.group.rotation.y = -lerpAngle(rc.prevVheading, rc.vheading, a) - Math.PI / 2;
       k.tilt.rotation.z = lerp(rc.prevRoll, rc.roll, a);
       k.tilt.rotation.x = lerp(rc.prevPitch, rc.pitch, a);
-      const steer = lerp(rc.prevSteer, rc.steerVis, a);
+      // Negate to match the body group's yaw, which flips the sim heading (line above:
+      // `-vheading`). steerVis is authored in sim-heading space (alpha = dir - heading), so
+      // without this flip the front wheels point the opposite way to the kart's actual turn.
+      const steer = -lerp(rc.prevSteer, rc.steerVis, a);
       k.fl.rotation.y = steer;
       k.fr.rotation.y = steer;
       const spin = lerp(rc.prevWheelSpin, rc.wheelSpin, a);

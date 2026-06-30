@@ -35,9 +35,12 @@ export function ShowroomKart({
   const { kart, pose } = useMemo(() => {
     const t = new Track(track);
     const k = buildKart(visual);
-    k.group.position.set(t.center[0][0], 0.5, t.center[0][1]);
+    // Rest the wheels on the road (origin one wheel-radius above the y=0.02 surface)
+    // instead of hovering at a fixed height.
+    const y = 0.02 + k.groundOffset;
+    k.group.position.set(t.center[0][0], y, t.center[0][1]);
     k.group.rotation.y = -t.ang[0] - Math.PI / 2;
-    return { kart: k, pose: { x: t.center[0][0], y: 0.5, z: t.center[0][1] } };
+    return { kart: k, pose: { x: t.center[0][0], y, z: t.center[0][1] } };
   }, [track, visual]);
 
   useEffect(() => () => kart.dispose(), [kart]);
