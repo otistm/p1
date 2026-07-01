@@ -1,5 +1,5 @@
 import { useGame } from '@grid/game';
-import { LIVERIES, TRAILS } from '@grid/content';
+import { LIVERIES, TRAILS, TRAIL_NONE_ID } from '@grid/content';
 import { hexToCss } from '../theme';
 import { DevNotes } from '../components/DevNotes';
 
@@ -72,7 +72,34 @@ export function TitleScreen() {
         </div>
 
         <div className="eyebrow" style={{ marginTop: 14 }}>Trail</div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '8px 0 4px' }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '8px 0 4px', flexWrap: 'wrap' }}>
+          <div
+            onClick={() => setTrail(TRAIL_NONE_ID)}
+            title="No trail"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 999,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: save.trailId === TRAIL_NONE_ID ? 'var(--ink)' : 'var(--muted)',
+              background: 'rgba(255,255,255,.04)',
+              border: `2px ${save.trailId === TRAIL_NONE_ID ? 'solid #fff' : 'dashed var(--line)'}`,
+              transform: save.trailId === TRAIL_NONE_ID ? 'scale(1.12)' : 'none',
+              transition: 'transform .1s',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+              <path
+                d="M3 3L11 11M11 3L3 11"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
           {TRAILS.map((t) => {
             const hex = t.value as number;
             const sel = t.id === save.trailId;

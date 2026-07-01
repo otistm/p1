@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PARTS, PARTS_BY_SLOT } from './parts';
 import { CARDS, TRAINING_CARDS, TUNING_CARDS } from './cards';
-import { COSMETICS } from './cosmetics';
+import { COSMETICS, trailHex, TRAIL_NONE_ID, DEFAULT_TRAIL_ID } from './cosmetics';
 import { SLOTS } from './schema';
 import { loadoutToStats, loadoutToVisual, BASELINE_STAT } from './loadout';
 import { STARTER_LOADOUT } from './parts';
@@ -41,6 +41,11 @@ describe('content registries', () => {
     for (const c of TUNING_CARDS) {
       expect(c.rarity).not.toBeUndefined();
     }
+  });
+
+  it('trail.none disables the wake tint', () => {
+    expect(trailHex(TRAIL_NONE_ID)).toBeNull();
+    expect(trailHex(DEFAULT_TRAIL_ID)).toBeGreaterThan(0);
   });
 });
 

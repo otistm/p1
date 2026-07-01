@@ -25,11 +25,18 @@ export const LIVERIES: Cosmetic[] = COSMETICS.filter((c) => c.kind === 'livery')
 
 export const TRAILS: Cosmetic[] = COSMETICS.filter((c) => c.kind === 'trail');
 
+/** Sentinel id — no cosmetic wake behind the player's kart. */
+export const TRAIL_NONE_ID = 'trail.none';
+
 /** The wake every new profile starts with (matches the default cyan livery). */
 export const DEFAULT_TRAIL_ID = 'trail.ion';
 
-/** Resolve a trail cosmetic's tint (hex), falling back to the default if the id is unknown. */
-export function trailHex(trailId: string | undefined): number {
+/**
+ * Resolve a trail cosmetic's tint (hex). Returns `null` for {@link TRAIL_NONE_ID} (no wake).
+ * Unknown ids fall back to the default Ion tint.
+ */
+export function trailHex(trailId: string | undefined): number | null {
+  if (trailId === TRAIL_NONE_ID) return null;
   const t = TRAILS.find((c) => c.id === trailId) ?? TRAILS.find((c) => c.id === DEFAULT_TRAIL_ID);
   return (t?.value as number) ?? 0x2bd9ff;
 }

@@ -33,8 +33,8 @@ interface RaceFieldProps {
   running: boolean;
   /** Playback multiplier for the sim clock (1× or 2×). Same result, just faster. */
   speed?: number;
-  /** Colour (hex) of the player's cosmetic trail wake. Absent = use the player's livery. */
-  playerTrailHex?: number;
+  /** Colour (hex) of the player's cosmetic trail wake. `null` = disabled; omit = livery tint. */
+  playerTrailHex?: number | null;
   /**
    * Fired when one of the *player's* tuning effects newly procs, with the effect kind and the
    * kart's projected screen position (px). Omit to disable the popups (e.g. reduced motion).
@@ -149,9 +149,9 @@ export function RaceField({
       }
     }
 
-    if (running) {
+    if (running && playerTrailHex !== null) {
       // Player wake: the player's cosmetic-trail colour follows them wherever they run (kart
-      // identity). Distance-spaced like the scuffs.
+      // identity). Distance-spaced like the scuffs. Skipped when the player chose no trail.
       const pk = karts[playerIndex];
       const pt = lastPlayerTrail.current;
       const pmoved = Number.isNaN(pt.x) ? Infinity : Math.hypot(pk.group.position.x - pt.x, pk.group.position.z - pt.z);
@@ -160,6 +160,9 @@ export function RaceField({
         pt.x = pk.group.position.x;
         pt.z = pk.group.position.z;
       }
+    }
+
+    if (running) {
       // Leader wake: a second trail behind whoever holds P1 (tinted their colour) so you can read
       // the lead at a glance — skipped when the player *is* the leader (their wake already shows).
       if (leaderIdx >= 0 && leaderIdx !== playerIndex) {

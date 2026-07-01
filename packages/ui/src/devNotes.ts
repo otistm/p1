@@ -19,6 +19,14 @@ export interface DevNote {
 /** Newest first — scroll the Dev Notes panel to browse older builds. */
 export const DEV_NOTES: DevNote[] = [
   {
+    id: '2026-07-01-trail-none',
+    date: '2026-07-01',
+    title: 'No-trail option',
+    changes: [
+      'Title screen trail picker now has an × option to turn off your wake entirely.',
+    ],
+  },
+  {
     id: '2026-07-01-dev-notes-scroll',
     date: '2026-07-01',
     title: 'Dev Notes history',
