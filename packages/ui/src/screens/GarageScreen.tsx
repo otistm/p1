@@ -9,17 +9,7 @@ import {
 } from '@grid/content';
 import { STAT_KEYS } from '@grid/sim';
 import { StatBars } from '../components/StatBars';
-import { RARITY_COLOR, STAT_COLOR } from '../theme';
-
-const SLOT_LABEL: Record<Slot, string> = {
-  chassis: 'Chassis',
-  engine: 'Engine',
-  tires: 'Tires',
-  brakes: 'Brakes',
-  gearing: 'Gearing',
-  aero: 'Aero',
-  ballast: 'Ballast',
-};
+import { RARITY_COLOR, SLOT_LABEL, STAT_COLOR } from '../theme';
 
 /** One-line trade-off framing per slot — the thing the player is choosing between. */
 const SLOT_TAGLINE: Record<Slot, string> = {
@@ -77,7 +67,7 @@ function StatDeltas({ part }: { part: Part }) {
             key={k}
             className="mono"
             style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 700,
               padding: '2px 6px',
               borderRadius: 6,
@@ -95,7 +85,7 @@ function StatDeltas({ part }: { part: Part }) {
         <span
           className="mono"
           style={{
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 700,
             padding: '2px 6px',
             borderRadius: 6,
@@ -116,6 +106,10 @@ export function GarageScreen() {
   const equipPart = useGame((s) => s.equipPart);
   const startSeason = useGame((s) => s.startSeason);
   const goTitle = useGame((s) => s.goTitle);
+  const goShop = useGame((s) => s.goShop);
+  const closeGarage = useGame((s) => s.closeGarage);
+  // Mid-season the garage is a re-equip hatch (returns to training), not the season launcher.
+  const midSeason = useGame((s) => s.garageReturn === 'training');
 
   const { stats } = loadoutToStats(save.loadout);
   const overall = overallRating(stats);
@@ -213,11 +207,13 @@ export function GarageScreen() {
           pointerEvents: 'none',
         }}
       >
-        <div className="eyebrow">Build · every part is a trade-off</div>
-        <div className="display" style={{ fontSize: 36, lineHeight: 1.04 }}>
+        <div className="eyebrow">
+          {midSeason ? 'Edit build · re-equip owned parts' : 'Build · every part is a trade-off'}
+        </div>
+        <div className="display" style={{ fontSize: 'var(--fs-h2)', lineHeight: 1.04 }}>
           {save.name}
         </div>
-        <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)' }}>
+        <div className="mono" style={{ fontSize: 'var(--fs-body)', color: 'var(--cyan)' }}>
           Overall {overall} · Rating {save.rating}
         </div>
       </div>
@@ -273,10 +269,8 @@ export function GarageScreen() {
                     gap: 8,
                   }}
                 >
-                  <span className="eyebrow" style={{ fontSize: 10 }}>
-                    {SLOT_LABEL[cfg.slot]}
-                  </span>
-                  <span style={{ color: 'var(--muted)', fontSize: 11 }}>{isOpen ? '▴' : '▾'}</span>
+                  <span className="eyebrow">{SLOT_LABEL[cfg.slot]}</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>{isOpen ? '▴' : '▾'}</span>
                 </div>
                 <div
                   style={{
@@ -293,7 +287,7 @@ export function GarageScreen() {
                     {equipped.name}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 0.3 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: 0.3 }}>
                   {SLOT_TAGLINE[cfg.slot]}
                 </div>
               </div>
@@ -344,14 +338,14 @@ export function GarageScreen() {
                           {sel && (
                             <span
                               className="mono"
-                              style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--cyan)' }}
+                              style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--cyan)' }}
                             >
                               EQUIPPED
                             </span>
                           )}
                         </div>
                         <StatDeltas part={p} />
-                        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.35 }}>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.35 }}>
                           {p.blurb}
                         </div>
                       </button>
@@ -385,16 +379,30 @@ export function GarageScreen() {
           <StatBars stats={stats} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button className="btn cyan" onClick={startSeason}>
-            Start Season →
-          </button>
-          <button
-            className="btn ghost"
-            style={{ fontSize: 14, padding: '9px 16px' }}
-            onClick={goTitle}
-          >
-            Back
-          </button>
+          {midSeason ? (
+            <>
+              <button className="btn cyan" onClick={closeGarage}>
+                Back to Training →
+              </button>
+              <button className="btn ghost sm" onClick={goShop}>
+                Shop
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn cyan" onClick={startSeason}>
+                Start Season →
+              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn ghost sm" style={{ flex: 1 }} onClick={goShop}>
+                  Shop
+                </button>
+                <button className="btn ghost sm" style={{ flex: 1 }} onClick={goTitle}>
+                  Back
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

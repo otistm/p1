@@ -25,15 +25,27 @@ curvature `curvS`. Helpers:
 
 Five ratings → physics quantities (tunable constants):
 
-- `topSpeed`  = f(speed, stamina) — straight-line cap.
-- `accel`     = f(power, wit, guts) — corner-exit drive.
+- `topSpeed`  = f(speed, stamina, power) — straight-line cap.
+- `accel`     = f(power, wit, guts) — corner-exit drive (scaled by `REF_MASS / mass`, so a
+  heavier kart accelerates slower — see mass below).
 - `brake`     = f(power) — deceleration.
 - `latGrip`   = f(power, wit, guts) — corner speed.
 - `yawGrip`   = f(wit) — steering authority.
 - `energyMax` = f(stamina); `drainEff` = f(wit) — economy.
 - `fadeFloor` = f(guts) — speed kept when empty; `surge` = f(guts) — last-lap kick.
 - `judge`     = f(wit) — corner-read accuracy.
-- `mass`      = f(parts) — collision impulse & accel feel.
+- `mass`      = f(parts) — collision impulse & accel feel. **Threaded end-to-end** via
+  `Entrant.mass` → `derive(stats, mass)` (default `REF_MASS = 170`). Before 2026-07-01 the
+  loadout mass was computed but never reached the sim, so ballast was physics-inert.
+
+> **2026-07-01 balance pass.** Coefficients were retuned so endurance (stamina→`energyMax`,
+> guts→`fadeFloor`) no longer dwarfs raw Speed/Power over a 3-lap race, and Wit was trimmed
+> further. Result on the archetype head-to-head: from Atlas 57.5 / Vortex 33.7 / Oracle 7.1 /
+> Crusher 1.2 / Blitz 0.5 to **Oracle 36 / Vortex 32 / Atlas 18 / Crusher 13 / Blitz 0.4** —
+> four of five now sit in a healthy 13–36% band. Blitz (pure Speed) stays weak: on a single
+> corner-limited track, raw top speed has no venue (adding Speed→`latGrip` just raises global
+> grip and hands the race back to the endurance king). Fixing Blitz needs **track variety**,
+> not more coefficient hacks. See `docs/CHANGELOG-KNOWLEDGE.md` + `DECISIONS.md`.
 
 ## Per-tick kart update (`FIXED_DT = 1/60`)
 
@@ -49,9 +61,12 @@ Five ratings → physics quantities (tunable constants):
    (see below); detect lap/finish.
 7. Smooth visual roll/pitch/steer/wheelSpin (render-only fields).
 
-`resolveCollisions` does positional separation + equal-mass restitution impulses so
-karts bounce instead of overlapping. Contact distance is the **sum of the two karts'
-collision radii** and the impulse (and its cap) scale by the harder hitter's
+`resolveCollisions` does positional separation + **mass-weighted** restitution impulses so
+karts bounce instead of overlapping. Each kart takes the *other's* mass fraction of the
+correction/impulse, so a heavier kart (heavy ballast) moves and slows less on contact while
+a lighter one (feather) gets shoved more; it reduces exactly to the old symmetric 0.5/0.5
+split when masses are equal (the common case). Contact distance is the **sum of the two
+karts' collision radii** and the impulse (and its cap) scale by the harder hitter's
 `impactScale`, so effects can widen a hit box or shove harder (see below).
 
 ## Race progress + live standings (`prog`)

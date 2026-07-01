@@ -1,6 +1,8 @@
-import type { DerivedAttributes, Entrant, RacerState, Rng } from './contracts';
+import type { DerivedAttributes, Entrant, LapStat, RacerState, Rng } from './contracts';
+import { REF_MASS } from './derive';
 import {
   type CardEffect,
+  type CardEffectKind,
   type EffectContext,
   type EffectState,
   type ModifierBag,
@@ -15,6 +17,26 @@ import type { Track } from './track';
 
 /** Kart collision radius (m). */
 export const RAD = 1.0;
+
+/**
+ * Render-only, per-tick race telemetry for the HUD — the situational facts that drive tuning
+ * effects, so the player can *see* why a staged card is (or isn't) firing. Never read back by
+ * the sim (no determinism impact); only maintained for the player kart.
+ */
+export interface RacerTelemetry {
+  /** Tucked in a rival's slipstream (a draft target sits ahead within the draft column). */
+  drafting: boolean;
+  /** Metres to that draft target (Infinity when not drafting). */
+  draftDist: number;
+  /** Clear lane ahead (the leader's clean-air condition). */
+  cleanAir: boolean;
+  /** Rivals inside the proximity bubble. */
+  traffic: number;
+  /** A rival is tucked directly behind (the defensive trigger). */
+  beingDrafted: boolean;
+  /** Currently in a corner. */
+  inCorner: boolean;
+}
 
 export interface StepContext {
   track: Track;
@@ -44,6 +66,53 @@ export class Racer {
   /** Updated each step from the effect bag; read by `resolveCollisions`. */
   collisionRadius = RAD;
   impactScale = 1;
+  /**
+   * Render-only: the kinds of effects that actually applied on the most recent step (reused
+   * array, cleared each step). The renderer reads this to pop "tuning procced" feedback; the
+   * sim never reads it back, so determinism is unaffected.
+   */
+  readonly activeEffects: CardEffectKind[] = [];
+  /** Render-only live telemetry for the HUD (maintained for the player only — see `step`). */
+  readonly telemetry: RacerTelemetry = {
+    drafting: false,
+    draftDist: Infinity,
+    cleanAir: false,
+    traffic: 0,
+    beingDrafted: false,
+    inCorner: false,
+  };
+  /**
+   * Render-only live performance readout for the HUD (player only). Two kinds of field:
+   *   • genuinely per-tick physics — `speedFrac` (speed ÷ top speed) and `gripLoad` (how much of
+   *     the lateral grip the current corner is using, 0..1) — which move constantly like stamina;
+   *   • the active tuning bag `topMult`/`accelMult`/`gripMult`/`steerMult` + stamina `fade`, which
+   *     sit at 1 until an effect fires (shown as pop-in magnitude chips).
+   * Never read back by the sim, so determinism is unaffected.
+   */
+  readonly live = {
+    speedFrac: 0,
+    gripLoad: 0,
+    topMult: 1,
+    accelMult: 1,
+    gripMult: 1,
+    steerMult: 1,
+    fade: 1,
+  };
+  /**
+   * Cumulative sim-time (s) at each completed lap — index 0 = end of lap 1. Deterministic
+   * (recorded on the fixed step that crosses the line). Powers the results lap-by-lap analysis.
+   */
+  readonly lapSplits: number[] = [];
+  /**
+   * Per-lap speed/corner/stamina aggregates, kept in lockstep with `lapSplits`. Recorded for
+   * every racer (cheap, batching-invariant) so the results analysis can echo the vitals HUD for
+   * the whole field. Render/result-only — never read back into the sim.
+   */
+  readonly lapStats: LapStat[] = [];
+  private lapSpeedSum = 0;
+  private lapSpeedPeak = 0;
+  private lapCornerSum = 0;
+  private lapTickCount = 0;
 
   x = 0;
   z = 0;
@@ -127,7 +196,53 @@ export class Racer {
     this.effState = newEffectState();
     this.collisionRadius = RAD;
     this.impactScale = 1;
+    this.activeEffects.length = 0;
+    this.resetTelemetry();
+    this.resetLive();
+    this.lapSplits.length = 0;
+    this.lapStats.length = 0;
+    this.lapSpeedSum = 0;
+    this.lapSpeedPeak = 0;
+    this.lapCornerSum = 0;
+    this.lapTickCount = 0;
     this.syncPrev();
+  }
+
+  /** Clear HUD telemetry to its neutral "nothing happening" state. */
+  private resetTelemetry(): void {
+    const t = this.telemetry;
+    t.drafting = false;
+    t.draftDist = Infinity;
+    t.cleanAir = false;
+    t.traffic = 0;
+    t.beingDrafted = false;
+    t.inCorner = false;
+  }
+
+  /** Bank the accumulated speed/corner/stamina for the lap just completed and reset the tallies. */
+  private snapLapStat(): void {
+    const n = Math.max(1, this.lapTickCount);
+    this.lapStats.push({
+      topSpeed: this.lapSpeedPeak,
+      avgSpeed: this.lapSpeedSum / n,
+      avgCorner: this.lapCornerSum / n,
+      stamina: clamp(this.energy / this.d.energyMax, 0, 1),
+    });
+    this.lapSpeedSum = 0;
+    this.lapSpeedPeak = 0;
+    this.lapCornerSum = 0;
+    this.lapTickCount = 0;
+  }
+
+  /** Reset the live performance readout to a neutral resting state. */
+  private resetLive(): void {
+    this.live.speedFrac = 0;
+    this.live.gripLoad = 0;
+    this.live.topMult = 1;
+    this.live.accelMult = 1;
+    this.live.gripMult = 1;
+    this.live.steerMult = 1;
+    this.live.fade = 1;
   }
 
   /** Snapshot the current render transform as the interpolation start point. */
@@ -260,18 +375,26 @@ export class Racer {
     this.hint = pr.idx;
 
     // Triggered card effects → a per-tick modifier bag layered onto derived attributes.
-    const bag: ModifierBag =
-      this.effects.length > 0
-        ? evaluateEffects(
-            this.effects,
-            this.buildEffectContext(ctx, pr.idx),
-            this.effState,
-            dt,
-            this.effectRng,
-          )
-        : defaultBag();
+    this.activeEffects.length = 0;
+    let bag: ModifierBag = defaultBag();
+    if (this.effects.length > 0) {
+      const ectx = this.buildEffectContext(ctx, pr.idx);
+      bag = evaluateEffects(this.effects, ectx, this.effState, dt, this.effectRng, this.activeEffects);
+      // Mirror the facts that gate those effects to the HUD (player only).
+      if (this.isPlayer) {
+        const t = this.telemetry;
+        t.drafting = ectx.draftTargetId !== null && ectx.draftDistance <= ZONE.draftLen;
+        t.draftDist = ectx.draftDistance;
+        t.cleanAir = ectx.cleanAirAhead;
+        t.traffic = ectx.proxTotal;
+        t.beingDrafted = ectx.beingDrafted;
+        t.inCorner = ectx.inCorner;
+      }
+    }
     const effTopSpeed = d.topSpeed * bag.topSpeedMult;
-    const effAccel = d.accel * bag.accelMult;
+    // Weight strategy reaches throttle response: a = F/m, so a heavier kart (heavy ballast)
+    // accelerates a touch slower and a lighter one (feather) quicker. Neutral at REF_MASS.
+    const effAccel = d.accel * bag.accelMult * (REF_MASS / d.mass);
     const effLatGrip = d.latGrip * bag.latGripMult;
     this.collisionRadius = RAD * bag.collisionRadiusMult;
     this.impactScale = bag.impactForceMult;
@@ -331,6 +454,28 @@ export class Racer {
     this.vx = Math.cos(this.heading) * speed;
     this.vz = Math.sin(this.heading) * speed;
 
+    // Corner load: omega·speed is the lateral acceleration the corner is demanding; over the
+    // available grip it reads as "how hard we're leaning on the tyres" (0..1). Computed for every
+    // racer so the results analysis can aggregate it per lap.
+    const gripLoad = clamp((Math.abs(omega) * speed) / Math.max(effLatGrip, 1e-3), 0, 1);
+    // Per-lap accumulators for the analysis (all racers). Reset when a lap is banked below.
+    this.lapSpeedSum += speed;
+    this.lapCornerSum += gripLoad;
+    this.lapTickCount++;
+    if (speed > this.lapSpeedPeak) this.lapSpeedPeak = speed;
+    // Mirror the live performance readout to the HUD (player only). speedFrac + gripLoad are
+    // real per-tick physics (they move every corner and straight); the bag mults + fade capture
+    // how tuning/tiring reshape the kart.
+    if (this.isPlayer) {
+      this.live.speedFrac = clamp(speed / d.topSpeed, 0, 1.5);
+      this.live.gripLoad = gripLoad;
+      this.live.topMult = bag.topSpeedMult;
+      this.live.accelMult = bag.accelMult;
+      this.live.gripMult = bag.latGripMult;
+      this.live.steerMult = bag.steerAuthorityMult;
+      this.live.fade = fade;
+    }
+
     // Energy.
     const effort = speed / d.topSpeed;
     let drain = 2.4 * effort * effort * d.drainEff;
@@ -375,9 +520,19 @@ export class Racer {
     if (delta < -len * 0.5) {
       delta += len; // crossed the start/finish seam forward → completed a lap
       this.lap++;
+      // Record the split for each *racing* lap completed. The first seam cross (grid → start
+      // line, lap -1 → 0) begins lap 1 and isn't a completion, so only log once lap ≥ 1.
+      if (this.lap >= 1) {
+        this.lapSplits.push(ctx.time);
+        this.snapLapStat();
+      }
     } else if (delta > len * 0.5) {
       delta -= len; // tiny backward wobble across the seam → undo the phantom lap
       this.lap--;
+      if (this.lapSplits.length > 0) {
+        this.lapSplits.pop();
+        this.lapStats.pop();
+      }
     }
     this.lastRaw = raw;
     this.cp += delta;
@@ -392,6 +547,13 @@ export class Racer {
       const overshoot = this.cp - finishLine;
       const frac = delta > 1e-6 ? clamp(overshoot / delta, 0, 1) : 0;
       this.finishTime = ctx.time - frac * dt;
+      // The final lap completes by crossing the finish line, not a mid-track seam, so record its
+      // split here (using the precise crossing time). Guarded so a finisher ends with exactly
+      // `laps` splits even if the seam logic already logged this lap.
+      if (this.lapSplits.length < ctx.laps) {
+        this.lapSplits.push(this.finishTime);
+        this.snapLapStat();
+      }
     }
 
     // Visuals (smoothed, render-only).
@@ -411,6 +573,9 @@ export class Racer {
     this.syncPrev();
     this.collisionRadius = RAD;
     this.impactScale = 1;
+    this.activeEffects.length = 0;
+    this.resetTelemetry();
+    this.resetLive();
     const speed = Math.max(0, Math.hypot(this.vx, this.vz) - 6 * dt);
     if (speed > 1e-3) this.heading = Math.atan2(this.vz, this.vx);
     this.vx = Math.cos(this.heading) * speed;
@@ -447,8 +612,11 @@ export class Racer {
 }
 
 /**
- * Positional separation + equal-mass restitution impulses so karts bounce off each
- * other instead of overlapping. Deterministic: iterates by index, no randomness.
+ * Positional separation + mass-weighted restitution impulses so karts bounce off each
+ * other instead of overlapping. The heavier kart moves less and its velocity changes less
+ * on contact (weight strategy: heavy ballast bullies, feather gets shoved). Reduces exactly
+ * to the old equal-split behaviour when masses match — the common case. Deterministic:
+ * iterates by index, no randomness.
  */
 export function resolveCollisions(racers: Racer[]): void {
   const e = 0.3;
@@ -465,24 +633,38 @@ export function resolveCollisions(racers: Racer[]): void {
         const nx = dx / dist;
         const nz = dz / dist;
         const overlap = D - dist;
-        const corr = overlap * 0.5;
-        a.x += nx * corr;
-        a.z += nz * corr;
-        b.x -= nx * corr;
-        b.z -= nz * corr;
+        // Split correction/impulse inversely to mass: each kart takes the *other's* mass
+        // fraction, so the heavier one barely moves. Equal masses → 0.5/0.5 (legacy).
+        const ma = a.d.mass;
+        const mb = b.d.mass;
+        const mt = ma + mb;
+        const aShare = mb / mt;
+        const bShare = ma / mt;
+        a.x += nx * overlap * aShare;
+        a.z += nz * overlap * aShare;
+        b.x -= nx * overlap * bShare;
+        b.z -= nz * overlap * bShare;
         const rvx = a.vx - b.vx;
         const rvz = a.vz - b.vz;
         const vn = rvx * nx + rvz * nz;
         if (vn < 0) {
           // Paint-Scraper-style shove: the harder hitter scales the impulse (and its cap).
           const scale = Math.max(a.impactScale, b.impactScale);
-          let j2 = -(1 + e) * vn * 0.5 * scale;
+          const dv = -(1 + e) * vn * scale;
+          let dvA = dv * aShare;
+          let dvB = dv * bShare;
+          // Cap the larger of the two velocity changes (preserves the old 6*scale ceiling).
           const cap = 6 * scale;
-          if (j2 > cap) j2 = cap;
-          a.vx += j2 * nx;
-          a.vz += j2 * nz;
-          b.vx -= j2 * nx;
-          b.vz -= j2 * nz;
+          const mx = Math.max(dvA, dvB);
+          if (mx > cap) {
+            const k = cap / mx;
+            dvA *= k;
+            dvB *= k;
+          }
+          a.vx += dvA * nx;
+          a.vz += dvA * nz;
+          b.vx -= dvB * nx;
+          b.vz -= dvB * nz;
         }
       }
     }

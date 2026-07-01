@@ -1,0 +1,21 @@
+---
+description: Keep the title-screen Dev Notes changelist current on every commit + push
+alwaysApply: true
+---
+
+# Dev Notes changelist
+
+The title screen shows a **Dev Notes** tag (top-right) backed by `packages/ui/src/devNotes.ts`.
+Players/testers read it to see what changed in the build they're running.
+
+## On every commit + push to GitHub
+
+Update `packages/ui/src/devNotes.ts` so it reflects what you just shipped:
+
+- If the latest `DEV_NOTES[0]` entry is **today's date**, extend its `changes` with the new bullets.
+- Otherwise **prepend** a new `DevNote` (newest first) with today's ISO `date`, a one-line `title`,
+  and short, **player-facing** `changes` bullets (what changed, not how).
+- The newest entry's `date` is the visible build stamp (`DEV_BUILD`) — keep it accurate.
+
+Keep it terse and user-facing. This is separate from `docs/CHANGELOG-KNOWLEDGE.md` (team/knowledge
+relay); a change isn't done until both the knowledge base and, when shipping, the Dev Notes reflect it.

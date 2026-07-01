@@ -179,3 +179,47 @@ describe('Vanguard Shield', () => {
     expect(out.centerPull).toBeCloseTo(0.6, 5);
   });
 });
+
+describe('fired sink (render-only proc feedback)', () => {
+  it('reports the kinds that actually applied, and stays silent otherwise', () => {
+    // A firing effect (leader in clean air) reports its kind…
+    const firing: string[] = [];
+    evaluateEffects(
+      [{ kind: 'cleanAirSupercharger' }],
+      baseCtx({ rank: 1, cleanAirAhead: true }),
+      newEffectState(),
+      1 / 60,
+      rng,
+      firing,
+    );
+    expect(firing).toEqual(['cleanAirSupercharger']);
+
+    // …while the same effect out of the lead reports nothing (no false positives).
+    const quiet: string[] = [];
+    evaluateEffects(
+      [{ kind: 'cleanAirSupercharger' }],
+      baseCtx({ rank: 4, cleanAirAhead: true }),
+      newEffectState(),
+      1 / 60,
+      rng,
+      quiet,
+    );
+    expect(quiet).toEqual([]);
+  });
+
+  it('collects every simultaneously-active kind', () => {
+    const fired: string[] = [];
+    evaluateEffects(
+      [
+        { kind: 'paintScraper' },
+        { kind: 'claustrophobia', params: { bubbleCount: 3 } },
+      ],
+      baseCtx({ inCorner: true, sideNeighborSign: 1, proxTotal: 3 }),
+      newEffectState(),
+      1 / 60,
+      rng,
+      fired,
+    );
+    expect(new Set(fired)).toEqual(new Set(['paintScraper', 'claustrophobia']));
+  });
+});

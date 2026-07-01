@@ -24,8 +24,33 @@ pkgpulse, cinevva, utsubo). All three hit 60fps; the choice is workflow.
 - One shadow-casting directional light; shadow map ≤ 2048; bias tuned.
 - **Asset pipeline**: glTF + Draco (geometry), KTX2/Basis (textures), sprite atlases
   (particles). Keep total VRAM modest.
-- **Post FX**: bloom + light motion blur via `@react-three/postprocessing`; gate heavy
-  passes behind a quality setting; honor `prefers-reduced-motion`.
+- **Post FX**: bloom via `@react-three/postprocessing` (single `EffectComposer`, `<Bloom>`
+  only, today). Motion blur is a **planned Phase-3 pass**, not yet shipped — see
+  `docs/game-review.md` §6. Gate heavy passes behind a quality setting; honor
+  `prefers-reduced-motion`.
+- **Speed cues are screen-space, not 3D**: the race speed vignette + speed lines
+  (`packages/ui/src/components/SpeedFx.tsx`, driven by `HudData.speedFrac`) are composited DOM in
+  the HUD layer, so they add **zero draw calls** — the preferred pattern for VFX here given the
+  ~150-draw-call in-race ceiling. Prefer instanced/screen-space effects over per-effect meshes;
+  all speed/one-shot FX honor `prefers-reduced-motion`.
+- **In-world race VFX are instanced**: tire scuffs and the leader/player wake
+  (`packages/render/src/raceFx.ts`) are each a single `InstancedMesh` — **2 draw calls total**
+  for the whole field, regardless of how many marks are on track. Scuffs are dark flat squares
+  recycled through a 512-slot ring buffer (persistent within a race; squares need no yaw so
+  overlapping rear-wheel drops read as one smear); the wake is additive quads that fade by
+  scaling toward zero. The **player trail** and the **leader wake** share that one wake mesh via
+  per-instance colour (`setColorAt`) — different tints, still 1 draw call. Reduced-motion drops
+  the animated wake (and its draw call) but keeps the static scuffs. Pattern to copy for any
+  future field-wide effect: pool + instance, never one mesh per particle.
+- **Tuning-proc feedback is screen-space**: when a player effect procs, `RaceField` projects the
+  kart to screen and the app pops a DOM `RaceProcFx` chip — **zero draw calls** (like `SpeedFx`).
+- **Location × time-of-day theming reuses geometry**: the look is the product of a `LocationPreset`
+  (biome: `TrackMeta.location` → ground colour + `SceneryStyle`, per track) and a `TimePreset`
+  (sky/fog/light rig, chosen from the player's real clock via `timeOfDayNow`). Neither swaps meshes:
+  changing time only rebuilds the sky/env texture + light params (once, not per frame); changing
+  location only rebuilds ground + scenery instances (once, on the track change). Scenery stays
+  instanced — trunk + rocks are one draw call each and canopies are one per tier (≤3), so an alpine
+  conifer forest costs the same order of draw calls as a meadow.
 
 ## Separation of concerns
 

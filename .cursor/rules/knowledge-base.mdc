@@ -31,6 +31,8 @@ or take an architectural decision:
 - `docs/multiplayer-async.md` — snapshot/ghost racing model
 - `docs/rendering-budget.md` — 60fps budget & web 3D stack
 - `docs/economy-cards.md` — hybrid draft + collection economy
+- `docs/training-tuning-cards.md` — unified card DB, hand rules, drag-to-play, reroll shop
 - `docs/content-schema.md` — data-driven content
+- `docs/game-review.md` — studio-wide review (correctness/balance/UX/VFX) + prioritized roadmap
 
 A change isn't done until the knowledge base reflects it.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PARTS, PARTS_BY_SLOT } from './parts';
-import { CARDS } from './cards';
+import { CARDS, TRAINING_CARDS, TUNING_CARDS } from './cards';
 import { COSMETICS } from './cosmetics';
 import { SLOTS } from './schema';
 import { loadoutToStats, loadoutToVisual, BASELINE_STAT } from './loadout';
@@ -27,6 +27,19 @@ describe('content registries', () => {
     for (const c of COSMETICS) {
       expect(Object.keys(c)).not.toContain('stats');
       expect(Object.keys(c)).not.toContain('mods');
+    }
+  });
+
+  it('splits into training (energy-gated, no rarity) and tuning (rarity + price) kinds', () => {
+    expect(TRAINING_CARDS.length).toBeGreaterThan(0);
+    expect(TUNING_CARDS.length).toBeGreaterThan(0);
+    expect(TRAINING_CARDS.length + TUNING_CARDS.length).toBe(CARDS.length);
+    for (const t of TRAINING_CARDS) {
+      expect(t.energyCost).not.toBeUndefined();
+      expect(t.rarity).toBeUndefined();
+    }
+    for (const c of TUNING_CARDS) {
+      expect(c.rarity).not.toBeUndefined();
     }
   });
 });

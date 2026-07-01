@@ -8,7 +8,7 @@ import {
   type KartStats,
   type RaceConfig,
 } from '@grid/sim';
-import { CARDS, LIVERIES, RIVAL_ARCHETYPES, ROUNDS, SUNSET_DERBY } from '@grid/content';
+import { CARDS, LIVERIES, RIVAL_ARCHETYPES, ROUNDS, trackForRound } from '@grid/content';
 import { computeSeasonStats, effectsFromCardIds, overallRating } from './economy';
 import type { BuildSnapshot, PlayerSave, SeasonState } from './types';
 
@@ -49,6 +49,7 @@ export function makeOpponents(save: PlayerSave, roundIdx: number, seed: number):
       name: `${g.name}${suffix}`,
       colorHex: colors[i % colors.length],
       stats: { ...g.stats },
+      mass: g.mass,
       effects,
     });
   });
@@ -77,23 +78,24 @@ export function makeOpponents(save: PlayerSave, roundIdx: number, seed: number):
 
 /** Assemble a full, reproducible RaceConfig for the current season round. */
 export function assembleRaceConfig(save: PlayerSave, season: SeasonState, seed: number): RaceConfig {
-  const { stats } = computeSeasonStats(save, season);
+  const { stats, mass } = computeSeasonStats(save, season);
   const player: Entrant = {
     id: 'player',
     name: save.name,
     colorHex: save.liveryHex,
     stats,
+    mass,
     isPlayer: true,
-    effects: effectsFromCardIds(season.draftedCardIds),
+    effects: effectsFromCardIds(season.stagedTuningCardIds),
   };
   const opponents = makeOpponents(save, season.round, seed);
-  const track = { ...SUNSET_DERBY, laps: ROUNDS[season.round].laps };
+  const track = { ...trackForRound(season.round), laps: ROUNDS[season.round].laps };
   return { track, seed, entrants: [player, ...opponents] };
 }
 
 /** Capture the player's current build as a shareable, race-able snapshot. */
 export function buildSnapshot(save: PlayerSave, season: SeasonState): BuildSnapshot {
-  const { stats } = computeSeasonStats(save, season);
+  const { stats, mass } = computeSeasonStats(save, season);
   const ts = Date.now();
   return {
     v: 2,
@@ -101,8 +103,9 @@ export function buildSnapshot(save: PlayerSave, season: SeasonState): BuildSnaps
     name: save.name,
     colorHex: save.liveryHex,
     stats,
+    mass,
     rating: overallRating(stats),
-    cardIds: [...season.draftedCardIds],
+    cardIds: [...season.stagedTuningCardIds],
     ts,
   };
 }

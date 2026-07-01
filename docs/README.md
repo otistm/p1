@@ -11,7 +11,9 @@ something, document it here, log the decision in `DECISIONS.md`, and relay it in
 - [sim-physics.md](./sim-physics.md) — the deterministic vehicle model.
 - [multiplayer-async.md](./multiplayer-async.md) — async snapshot/ghost racing.
 - [rendering-budget.md](./rendering-budget.md) — the web 3D stack and 60fps budget.
-- [economy-cards.md](./economy-cards.md) — the hybrid draft + collection economy.
+- [economy-cards.md](./economy-cards.md) — the shop + collection economy.
+- [training-tuning-cards.md](./training-tuning-cards.md) — unified card DB, hand rules, drag-to-play, shop.
+- [game-review.md](./game-review.md) — full studio review + phased roadmap.
 - [content-schema.md](./content-schema.md) — how data-driven content works.
 
 ## Logs

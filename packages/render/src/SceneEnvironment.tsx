@@ -2,20 +2,21 @@ import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { makeSkyTexture } from './world/sky';
+import type { TimePreset } from './world/theme';
 
 /**
  * Sets the gradient sky background, distance fog, and image-based lighting (so metals
- * and rims pick up sky reflections). Runs once; disposes its generated textures.
+ * and rims pick up sky reflections). Re-runs when the time-of-day changes; disposes its textures.
  */
-export function SceneEnvironment() {
+export function SceneEnvironment({ preset }: { preset: TimePreset }) {
   const { scene, gl } = useThree();
   useEffect(() => {
-    scene.background = makeSkyTexture(false);
-    scene.fog = new THREE.Fog(0xc4dcec, 110, 380);
+    scene.background = makeSkyTexture(false, preset.sky, preset.sunGlow);
+    scene.fog = new THREE.Fog(preset.fog.color, preset.fog.near, preset.fog.far);
     let envTexture: THREE.Texture | null = null;
     try {
       const pmrem = new THREE.PMREMGenerator(gl);
-      const envTex = makeSkyTexture(true);
+      const envTex = makeSkyTexture(true, preset.sky, preset.sunGlow);
       envTex.mapping = THREE.EquirectangularReflectionMapping;
       envTexture = pmrem.fromEquirectangular(envTex).texture;
       scene.environment = envTexture;
@@ -30,6 +31,6 @@ export function SceneEnvironment() {
       scene.fog = null;
       envTexture?.dispose();
     };
-  }, [scene, gl]);
+  }, [scene, gl, preset]);
   return null;
 }

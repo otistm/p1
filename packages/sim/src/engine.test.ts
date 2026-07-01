@@ -3,6 +3,8 @@ import { RaceEngine } from './engine';
 import { Track } from './track';
 import { FIXED_DT, type Entrant, type RaceConfig, type TrackDef } from './contracts';
 import { makeRng } from './rng';
+import { derive } from './derive';
+import { Racer, resolveCollisions } from './racer';
 
 const TRACK: TrackDef = {
   id: 'test-oval',
@@ -81,14 +83,70 @@ describe('RaceEngine determinism', () => {
       // 'd' has the highest base stats.
       if (res.order[0].id === 'd') strongWins++;
     }
-    // Not guaranteed every race, but should dominate.
-    expect(strongWins).toBeGreaterThan(N * 0.6);
+    // Not guaranteed every race, but should clearly dominate. (The 2026-07-01 balance pass
+    // de-emphasised endurance snowballing for closer racing, so a +5-all edge over a tight
+    // field now wins ~55%+ rather than 60%+ — still well above the 25% a coin-toss would give.)
+    expect(strongWins).toBeGreaterThan(N * 0.5);
+  });
+
+  it('records one cumulative, monotonic lap split per lap for finishers (powers lap analysis)', () => {
+    const res = RaceEngine.resolve(config(42));
+    for (const row of res.order) {
+      expect(row.laps).toBe(TRACK.laps);
+      if (!row.finished) continue;
+      // A finisher completed every lap → exactly `laps` splits, strictly increasing, with the
+      // last one at the finish line (≈ finishTime, within the coarse resolve step).
+      expect(row.lapSplits).toHaveLength(TRACK.laps);
+      for (let i = 1; i < row.lapSplits.length; i++) {
+        expect(row.lapSplits[i]).toBeGreaterThan(row.lapSplits[i - 1]);
+      }
+      const lastSplit = row.lapSplits[row.lapSplits.length - 1];
+      expect(Math.abs(lastSplit - row.finishTime)).toBeLessThan(FIXED_DT * 8 + 1e-6);
+      // Per-lap stats ride alongside the splits, one per lap, with sane physical ranges.
+      expect(row.lapStats).toHaveLength(row.lapSplits.length);
+      for (const st of row.lapStats) {
+        expect(st.topSpeed).toBeGreaterThan(0);
+        expect(st.topSpeed).toBeGreaterThanOrEqual(st.avgSpeed);
+        expect(st.avgCorner).toBeGreaterThanOrEqual(0);
+        expect(st.avgCorner).toBeLessThanOrEqual(1);
+        expect(st.stamina).toBeGreaterThanOrEqual(0);
+        expect(st.stamina).toBeLessThanOrEqual(1);
+      }
+    }
   });
 
   it('ranks are 1..N with no gaps', () => {
     const res = RaceEngine.resolve(config(42));
     const ranks = res.order.map((r) => r.rank).sort((x, y) => x - y);
     expect(ranks).toEqual([1, 2, 3, 4]);
+  });
+
+  it('applies loadout mass to physics: a lighter kart time-trials faster (a = F/m)', () => {
+    // Regression guard for the "ballast never reaches the sim" bug. Solo time-trials isolate
+    // the drive from collision noise: two stat-identical karts, one feather (145 kg) and one
+    // heavy (195 kg). Higher accel (lighter) must yield lower finish times, consistently
+    // across seeds. If mass were dropped both would default to REF_MASS and finish in
+    // *identical* time — exactly the bug this guards.
+    const base = { speed: 48, stamina: 48, power: 48, guts: 48, wit: 48 };
+    let lighterFaster = 0;
+    let everDifferent = false;
+    const N = 20;
+    for (let s = 0; s < N; s++) {
+      const light = RaceEngine.resolve({
+        track: TRACK,
+        seed: 5000 + s,
+        entrants: [{ id: 'solo', name: 'solo', colorHex: 0xffffff, stats: base, mass: 145 }],
+      }).order[0].finishTime;
+      const heavy = RaceEngine.resolve({
+        track: TRACK,
+        seed: 5000 + s,
+        entrants: [{ id: 'solo', name: 'solo', colorHex: 0xffffff, stats: base, mass: 195 }],
+      }).order[0].finishTime;
+      if (light !== heavy) everDifferent = true;
+      if (light < heavy) lighterFaster++;
+    }
+    expect(everDifferent).toBe(true);
+    expect(lighterFaster).toBeGreaterThan(N * 0.7);
   });
 
   it('stays deterministic and frame-batching invariant with effect-bearing entrants', () => {
@@ -209,5 +267,33 @@ describe('RaceEngine determinism', () => {
         expect(fin[i].finishTime).toBeGreaterThanOrEqual(fin[i - 1].finishTime - 1e-9);
       }
     }
+  });
+});
+
+describe('mass-weighted collisions', () => {
+  it('shoves the lighter kart more than the heavier one, and matches legacy split at equal mass', () => {
+    const stats = { speed: 50, stamina: 50, power: 50, guts: 50, wit: 50 };
+    // Build a kart at a world pose with a head-on closing velocity along x.
+    const make = (id: string, x: number, vx: number, mass: number): Racer => {
+      const r = new Racer({ id, name: id, colorHex: 0, stats, mass }, derive(stats, mass));
+      r.x = x;
+      r.z = 0;
+      r.vx = vx;
+      r.vz = 0;
+      return r;
+    };
+
+    // Unequal mass: light (145) vs heavy (195), overlapping (|dx| < 2*RAD) and closing.
+    const light = make('light', -0.5, 4, 145);
+    const heavy = make('heavy', 0.5, -4, 195);
+    resolveCollisions([light, heavy]);
+    // The lighter kart's speed change must exceed the heavier kart's.
+    expect(Math.abs(light.vx - 4)).toBeGreaterThan(Math.abs(heavy.vx + 4));
+
+    // Equal mass reduces to the old symmetric 0.5/0.5 split.
+    const a = make('a', -0.5, 4, 170);
+    const b = make('b', 0.5, -4, 170);
+    resolveCollisions([a, b]);
+    expect(Math.abs(a.vx - 4)).toBeCloseTo(Math.abs(b.vx + 4), 6);
   });
 });

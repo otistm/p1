@@ -68,6 +68,12 @@ export interface Entrant {
   /** 0xRRGGBB livery color. */
   colorHex: number;
   stats: KartStats;
+  /**
+   * Kart mass (kg) from the chassis/ballast loadout. Fed to `derive` so weight strategy
+   * (feather/heavy ballast) actually reaches the physics. Absent = the reference mass
+   * (see REF_MASS / derive's default), i.e. legacy behaviour for stat-only entrants.
+   */
+  mass?: number;
   isPlayer?: boolean;
   /** Optional triggered card effects evaluated inside the sim. Absent = legacy behaviour. */
   effects?: CardEffect[];
@@ -111,12 +117,30 @@ export interface RaceFrame {
   racers: RacerState[];
 }
 
+/** Per-lap performance aggregates for one racer — the post-race echo of the live vitals HUD. */
+export interface LapStat {
+  /** Peak speed reached during the lap (m/s). */
+  topSpeed: number;
+  /** Mean speed over the lap (m/s). */
+  avgSpeed: number;
+  /** Mean lateral-grip usage over the lap (0..1) — the "corner load" gauge, averaged. */
+  avgCorner: number;
+  /** Stamina fraction at the end of the lap (0..1). */
+  stamina: number;
+}
+
 export interface RaceResultRow {
   id: string;
   name: string;
   rank: number;
   finishTime: number;
   finished: boolean;
+  /** Cumulative time (s) at each completed lap; index 0 = end of lap 1. Drives lap analysis. */
+  lapSplits: number[];
+  /** Per-lap speed/corner/stamina aggregates, parallel to `lapSplits`. Powers the analysis tab. */
+  lapStats: LapStat[];
+  /** Total laps in the race (so the analysis knows how many lap columns to render). */
+  laps: number;
 }
 
 export interface RaceResult {

@@ -1,12 +1,14 @@
 /** P1 design tokens — the single source of truth for the visual system. */
 
+import type { Slot } from '@grid/content';
+
 export const COLORS = {
   bg: '#14171f',
   panel: '#1e232e',
   panel2: '#252b38',
   line: '#333b4a',
   ink: '#eef1f6',
-  muted: '#8b93a3',
+  muted: '#a6afc0',
   orange: '#ff6a2b',
   cyan: '#2bd9ff',
   green: '#4ee08a',
@@ -54,6 +56,20 @@ export const LIVERY = [
 ] as const;
 
 export const hexToCss = (hex: number): string => '#' + hex.toString(16).padStart(6, '0');
+
+/** Human labels + canonical display order for kart part slots. Shared by the garage
+ * blueprint and the kart inspector so the two never drift (was duplicated in both). */
+export const SLOT_LABEL: Record<Slot, string> = {
+  chassis: 'Chassis',
+  engine: 'Engine',
+  tires: 'Tires',
+  brakes: 'Brakes',
+  gearing: 'Gearing',
+  aero: 'Aero',
+  ballast: 'Ballast',
+};
+
+export const SLOT_ORDER: Slot[] = ['chassis', 'engine', 'tires', 'brakes', 'gearing', 'aero', 'ballast'];
 
 /** Rarity colors for parts and cards. */
 export const RARITY_COLOR: Record<string, string> = {

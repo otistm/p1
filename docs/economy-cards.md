@@ -1,17 +1,30 @@
-# Reference: hybrid economy (draft + collection)
+# Reference: shop economy (collection + card hand)
 
-Decision: **hybrid**. A persistent collection of parts/cards earned over time, PLUS an
-in-run draft that assembles the kart for the current season.
+Decision: a persistent collection bought with podium **winnings**, played from a **hand** of
+cards on the training screen. (The earlier per-run *draft* — pick 1 of 3 random owned cards —
+was removed on 2026-06-30; see `DECISIONS.md`.)
 
-## Two layers
+## The loop
 
-1. **Collection (persistent meta)** — like Umamusume support cards. Players earn/own
-   parts and cards across seasons; cards can be leveled/upgraded. Saved locally now,
-   server-side later. This is the long-term progression.
-2. **In-run draft (per season)** — at the season start (and at milestones), the player
-   is offered a choice of cards drawn from their collection (plus some neutral pool). The
-   chosen cards modify the kart's parts/ratings for that run. This is the moment-to-moment
-   build expression and gives runs variety.
+1. **Collection (persistent meta)** — players own parts and tuning cards across seasons
+   (`PlayerSave.ownedCardIds`), saved locally now, server-side later. New tuning cards are
+   **bought** in the shop with `money`.
+2. **Currency (`PlayerSave.money`)** — earned by finishing a race. `racePayout(rank, round)`
+   pays `FINISH_PAYOUT = [120, 70, 35, 22, 14, 9]` (podium best, with a small 4th–6th
+   consolation added in Phase 1 so a loss isn't a total wipe — see `docs/game-review.md` §2),
+   scaled up `×(1 + round*0.4)` in the tougher later rounds. New players start with a small
+   seed balance so the shop is usable before the first win.
+3. **Shop (`ShopScreen`)** — tuning cards priced by rarity (`cardPrice`: common 40 / rare 90 /
+   epic 160 / legendary 280). Buying adds the card to the collection. Phase-2 (inert) cards are
+   excluded via `LIVE_CARD_IDS`. The storefront layout (4 rotating slots + paid rerolls) is
+   specified in [training-tuning-cards.md](training-tuning-cards.md).
+4. **Hand + play (per season)** — the training screen shows a fanned, TCG-style hand
+   (`CardHand`): the six **training** cards (always available) plus the player's owned
+   **tuning** cards. This is the moment-to-moment build expression and gives runs variety.
+   **The card/hand rules are specified in [training-tuning-cards.md](training-tuning-cards.md)**
+   (unified card database, drag-to-kart play, 4-card consumable tuning hand, kart inspector,
+   and the 4-slot reroll shop), which supersedes the earlier equip-up-to-3
+   (`EQUIP_SLOTS`) model described here.
 
 ## Cards
 
@@ -50,7 +63,8 @@ while adding overtakes (more drama).
   ceilings and adds *conditional* effects, not unconditional power.
 - Monetization (if any) is **cosmetic-only** (livery, decals, wheels, trails). Cosmetics
   never touch `KartStats`.
-- Draft offers are **seeded** so a run can be reproduced and shared.
+- Winnings pay **only** on the podium, so power tracks *racing well*, not grinding; the shop
+  sells conditional trade-off cards, not flat stat walls.
 
 ## Data location
 

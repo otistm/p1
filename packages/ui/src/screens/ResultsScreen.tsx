@@ -1,5 +1,8 @@
-import { useGame } from '@grid/game';
+import { useState } from 'react';
+import { useGame, racePayout } from '@grid/game';
 import { ROUNDS } from '@grid/content';
+import { MoneyBadge } from '../components/MoneyBadge';
+import { RaceAnalysis } from '../components/RaceAnalysis';
 import { hexToCss } from '../theme';
 
 function ordinal(n: number): string {
@@ -18,11 +21,15 @@ export function ResultsScreen() {
   const season = useGame((s) => s.season);
   const raceConfig = useGame((s) => s.raceConfig);
   const nextRound = useGame((s) => s.nextRound);
+  const goShop = useGame((s) => s.goShop);
+  const money = useGame((s) => s.save.money);
+  const [tab, setTab] = useState<'summary' | 'analysis'>('summary');
   if (!result) return null;
   const colorById = (id: string) =>
     raceConfig?.entrants.find((e) => e.id === id)?.colorHex ?? 0xffffff;
 
   const order = result.order;
+  const laps = raceConfig?.track.laps ?? order[0]?.laps ?? 3;
   const player = order.find((r) => r.id === 'player');
   const rank = player?.rank ?? order.length;
   const isLast = season.round >= ROUNDS.length - 1;
@@ -30,16 +37,57 @@ export function ResultsScreen() {
   const round = ROUNDS[season.round];
 
   const title = isLast ? (won ? 'Champion!' : 'Season Over') : won ? 'Race Won!' : `P${rank} Finish`;
+  const winnings = racePayout(rank, season.round);
+  const podium = rank <= 3;
 
   return (
     <div className="overlay" style={{ pointerEvents: 'auto' }}>
-      <div className="card" style={{ width: 'min(560px,94vw)', padding: '30px 32px' }}>
-        <div className="display" style={{ fontSize: 40, textAlign: 'center' }}>
+      <div className="card" style={{ width: tab === 'analysis' ? 'min(700px,96vw)' : 'min(560px,94vw)', padding: '30px 32px' }}>
+        <div className="display" style={{ fontSize: 'var(--fs-h1)', textAlign: 'center' }}>
           {title}
         </div>
-        <div style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: 18 }}>
+        <div style={{ textAlign: 'center', color: 'var(--muted)', marginBottom: 14 }}>
           {round.name} · finished {ordinal(rank)} of {order.length}
         </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            marginBottom: 16,
+            fontSize: 'var(--fs-body)',
+            color: 'var(--muted)',
+          }}
+        >
+          <span style={{ color: podium ? 'var(--green)' : 'var(--muted)' }}>
+            {podium
+              ? 'Podium! Winnings'
+              : winnings > 0
+                ? 'Off the podium — consolation'
+                : 'Off the podium — no winnings'}
+          </span>
+          <MoneyBadge amount={money} delta={winnings} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
+          {(['summary', 'analysis'] as const).map((t) => (
+            <button
+              key={t}
+              className={tab === t ? 'btn cyan' : 'btn ghost'}
+              style={{ padding: '5px 16px', fontSize: 13, textTransform: 'capitalize' }}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'analysis' ? (
+          <div style={{ marginBottom: 22 }}>
+            <RaceAnalysis rows={order} laps={laps} colorFor={colorById} />
+          </div>
+        ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 22 }}>
           <tbody>
             {order.map((r) => {
@@ -74,9 +122,15 @@ export function ResultsScreen() {
             })}
           </tbody>
         </table>
+        )}
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          {!isLast && (
+            <button className="btn ghost" onClick={goShop}>
+              Shop
+            </button>
+          )}
           <button className="btn cyan" onClick={nextRound}>
-            {isLast ? 'Finish Season' : 'Next Round →'}
+            {isLast ? 'Finish Season' : 'Next Round'}
           </button>
         </div>
       </div>

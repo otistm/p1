@@ -3,10 +3,13 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { SceneEnvironment } from './SceneEnvironment';
+import { TIME_PRESETS, type TimeOfDay } from './world/theme';
 import { detectTier } from './detectTier';
 
 interface GameCanvasProps {
   children: ReactNode;
+  /** Time-of-day mood for sky, fog and lights. Driven by the player's real clock. */
+  time?: TimeOfDay;
 }
 
 /**
@@ -14,8 +17,9 @@ interface GameCanvasProps {
  * cheap post-FX stack. Children switch between the showroom and the race without ever
  * tearing down the renderer (keeps 60fps and avoids context churn).
  */
-export function GameCanvas({ children }: GameCanvasProps) {
+export function GameCanvas({ children, time = 'day' }: GameCanvasProps) {
   const tier = useMemo(detectTier, []);
+  const preset = TIME_PRESETS[time];
   return (
     <Canvas
       id="scene"
@@ -32,12 +36,12 @@ export function GameCanvas({ children }: GameCanvasProps) {
         gl.shadowMap.type = THREE.PCFSoftShadowMap;
       }}
     >
-      <SceneEnvironment />
-      <hemisphereLight args={[0xcfe3f5, 0x5d4a30, 0.45]} />
+      <SceneEnvironment preset={preset} />
+      <hemisphereLight args={[preset.hemi.sky, preset.hemi.ground, preset.hemi.intensity]} />
       <directionalLight
         position={[72, 128, 52]}
-        intensity={1.55}
-        color={0xfff3df}
+        intensity={preset.sun.intensity}
+        color={preset.sun.color}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.00035}
@@ -51,7 +55,7 @@ export function GameCanvas({ children }: GameCanvasProps) {
         shadow-camera-left={-66}
         shadow-camera-right={66}
       />
-      <directionalLight position={[-60, 40, -30]} intensity={0.25} color={0x9ab8d8} />
+      <directionalLight position={[-60, 40, -30]} intensity={preset.fill.intensity} color={preset.fill.color} />
       {children}
       {tier.quality === 'high' && !tier.reducedMotion && (
         <EffectComposer>

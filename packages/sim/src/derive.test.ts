@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { derive } from './derive';
+import { derive, REF_MASS } from './derive';
 import { makeRng, hashSeed } from './rng';
 
 describe('derive', () => {
@@ -15,6 +15,13 @@ describe('derive', () => {
     const wit = derive({ speed: 20, stamina: 20, power: 20, guts: 20, wit: 80 });
     expect(wit.drainEff).toBeLessThan(low.drainEff);
     expect(wit.judge).toBeGreaterThan(low.judge);
+  });
+
+  it('carries the loadout mass through (default = REF_MASS)', () => {
+    const stats = { speed: 40, stamina: 40, power: 40, guts: 40, wit: 40 };
+    expect(derive(stats).mass).toBe(REF_MASS);
+    expect(derive(stats, 145).mass).toBe(145);
+    expect(derive(stats, 195).mass).toBe(195);
   });
 });
 

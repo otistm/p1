@@ -12,7 +12,7 @@ by **Zod** in `@grid/content`. Adding content must not require engine changes.
   trigger?, effectText?, archetype?, special?, flavor }`. `effect` is a `CardEffect`
   `{ kind, params?: Record<string, number> }` — a Zod mirror of the sim's
   `CardEffectKind` union (the canonical kinds live in `@grid/sim`). `trigger`/`effectText`
-  are the human-readable strings the draft UI renders; `archetype` is a short tag. A card
+  are the human-readable strings the shop/hand card UI renders; `archetype` is a short tag. A card
   may have both a small flat `mods` and an `effect`.
 - **TrackSchema** — conforms to `@grid/sim`'s `TrackDef` `{ id, name, points, width,
   laps, samplesPerSegment? }` plus presentation metadata (theme, scenery seed).

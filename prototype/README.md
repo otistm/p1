@@ -9,5 +9,5 @@ Three.js auto-racer that seeded this project. It established the systems we hard
 - A fixed `1/60` timestep loop and a season/training meta-loop.
 
 The production version lives in `packages/sim` (deterministic, headless, tested),
-`packages/render` (R3F visuals), and `packages/game` (draft + economy + season).
+`packages/render` (R3F visuals), and `packages/game` (shop + economy + season).
 Place the original HTML here as `p1-concept.html` for side-by-side reference.

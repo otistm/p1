@@ -24,60 +24,64 @@ import {
   ROUNDS,
   RIVAL_ARCHETYPES,
   STARTER_LOADOUT,
-  STARTER_CARD_IDS,
+  SAMPLE_TUNING_CARD_IDS,
   CARDS,
-  CARDS_BY_ID,
   type Loadout,
 } from '@grid/content';
-import { initialSeason, beginRound, applyTraining, computeRaceStats, effectsFromCardIds } from '@grid/game';
-import { rollDraft } from '@grid/game';
+import {
+  initialSeason,
+  beginRound,
+  applyTraining,
+  computeRaceStats,
+  effectsFromCardIds,
+  racePayout,
+  cardPrice,
+  sampleShopSlots,
+  MAX_OWNED_TUNING,
+} from '@grid/game';
+
+/** Mirror of store.ts STARTING_MONEY (not exported; kept in sync here for the harness). */
+const STARTING_MONEY = 150;
 
 const overall = (s: KartStats): number => STAT_KEYS.reduce((a, k) => a + s[k], 0);
 
 const STAT_TO_TRAINING: Record<string, string> = {
-  speed: 'speed',
-  power: 'power',
-  wit: 'corner',
-  stamina: 'endure',
-  guts: 'grit',
+  speed: 'train.speed',
+  power: 'train.power',
+  wit: 'train.corner',
+  stamina: 'train.endure',
+  guts: 'train.grit',
 };
 
+/** A fixed session budget standing in for "however long a player wants to train" (the
+ * real game is energy-gated, not turn-limited — see docs/training-tuning-cards.md) so the
+ * balance sweep stays comparable round to round. */
+const SESSIONS_PER_ROUND = 5;
+
 /**
- * Play one realistic season turn-by-turn: each turn rest if spent, else train the weakest
- * current stat; draft the highest-value card each round. Returns the player's final race
- * stats for the requested round (training + cards accumulate across rounds).
+ * Play one realistic season, training the weakest current stat each session (resting when
+ * spent) and staging the starter tuning cards (owned from the start, capped at
+ * `MAX_OWNED_TUNING`) every round. Returns the player's final race stats for each round.
  */
 function developedStatsByRound(loadout: Loadout, seed: number): KartStats[] {
   let season = initialSeason();
-  const cards: string[] = [];
+  const cards = [...SAMPLE_TUNING_CARD_IDS];
   const base = loadoutToStats(loadout).stats;
   const out: KartStats[] = [];
 
   for (let ri = 0; ri < ROUNDS.length; ri++) {
-    season = beginRound(season, ri);
+    season = { ...beginRound(season, ri), stagedTuningCardIds: [...cards] };
 
-    // Draft one card: the offered card with the largest net stat swing.
-    const offer = rollDraft(hashSeed(seed, ri, 53), STARTER_CARD_IDS, 3);
-    let bestId = offer[0];
-    let bestVal = -Infinity;
-    for (const id of offer) {
-      const m = CARDS_BY_ID[id].mods;
-      const v = STAT_KEYS.reduce((a, k) => a + (m[k] ?? 0), 0);
-      if (v > bestVal) {
-        bestVal = v;
-        bestId = id;
-      }
-    }
-    cards.push(bestId);
-
-    // Train every turn.
+    let sessions = 0;
     let turn = 0;
-    while (season.turnsLeft > 0) {
+    while (sessions < SESSIONS_PER_ROUND && turn < 40) {
       const cur = computeRaceStats(loadout, season.trainedStats, cards).stats;
       let lowK = STAT_KEYS[0];
       for (const k of STAT_KEYS) if (cur[k] < cur[lowK]) lowK = k;
-      const trainingId = season.energy < 35 ? 'rest' : STAT_TO_TRAINING[lowK];
+      const resting = season.energy < 35;
+      const trainingId = resting ? 'train.rest' : STAT_TO_TRAINING[lowK];
       season = applyTraining(season, trainingId, makeRng(hashSeed(seed, ri * 31 + turn, 17))).season;
+      if (!resting) sessions++;
       turn++;
     }
     out.push(computeRaceStats(loadout, season.trainedStats, cards).stats);
@@ -112,8 +116,8 @@ function opponents(roundIdx: number, seed: number): Entrant[] {
 }
 
 function config(loadout: Loadout, roundIdx: number, seed: number): RaceConfig {
-  const { stats } = loadoutToStats(loadout);
-  const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, isPlayer: true };
+  const { stats, mass } = loadoutToStats(loadout);
+  const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, mass, isPlayer: true };
   const track = { ...SUNSET_DERBY, laps: ROUNDS[roundIdx].laps };
   return { track, seed, entrants: [player, ...opponents(roundIdx, seed)] };
 }
@@ -138,12 +142,13 @@ function opponentsEff(roundIdx: number, seed: number): Entrant[] {
 }
 
 function configEff(loadout: Loadout, roundIdx: number, seed: number): RaceConfig {
-  const { stats } = loadoutToStats(loadout);
+  const { stats, mass } = loadoutToStats(loadout);
   const player: Entrant = {
     id: 'player',
     name: 'You',
     colorHex: 0x2bd9ff,
     stats,
+    mass,
     isPlayer: true,
     effects: effectsFromCardIds(PLAYER_EFFECT_CARDS),
   };
@@ -299,7 +304,8 @@ for (const [buildName, loadout] of Object.entries(BUILDS)) {
     for (let s = 0; s < N; s++) {
       const seed = 4000 + s * 17;
       const stats = developedStatsByRound(BUILDS.Stock, seed)[ri];
-      const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, isPlayer: true };
+      const mass = loadoutToStats(BUILDS.Stock).mass;
+      const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, mass, isPlayer: true };
       const track = { ...SUNSET_DERBY, laps: rdef.laps };
       const o = observe({ track, seed, entrants: [player, ...opponents(ri, seed)] });
       if (o.playerRank === 1) wins++;
@@ -364,6 +370,90 @@ for (const [buildName, loadout] of Object.entries(BUILDS)) {
   sweep['EffectsBalance'] = rows;
 }
 
+// --- Economy simulation: can a full-burn player stay solvent? -----------------
+// Models the real money loop: seed 150 credits, then each round visit the shop, buy tuning
+// cards per a strategy, stage them, race (developed player -> realistic rank/payout), and
+// CONSUME every staged card. Reports cash flow so we can see the burn-rate deficit and
+// whether the economy tuning fixes it. Shop rolls use a dedicated seeded RNG (commerce isn't
+// part of race determinism). `finishTime`-based rank comes from the developed player config.
+type EconStrategy = 'fullBurn' | 'thrifty' | 'noBuy';
+
+function developedRanksForSeed(seed: number): number[] {
+  const statsByRound = developedStatsByRound(BUILDS.Stock, seed);
+  const mass = loadoutToStats(BUILDS.Stock).mass;
+  return ROUNDS.map((rdef, ri) => {
+    const stats = statsByRound[ri];
+    const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, mass, isPlayer: true };
+    const track = { ...SUNSET_DERBY, laps: rdef.laps };
+    const o = observe({ track, seed, entrants: [player, ...opponents(ri, seed)] });
+    return o.playerRank;
+  });
+}
+
+function economySeason(seed: number, strategy: EconStrategy) {
+  const rng = makeRng(hashSeed(seed, 999, 0xca511));
+  const ranks = developedRanksForSeed(seed);
+  let money = STARTING_MONEY;
+  let spent = 0;
+  let earned = 0;
+  let owned: string[] = [];
+  const perRound = ROUNDS.map((rdef, ri) => {
+    // Shop: buy cheapest-first up to the strategy's appetite.
+    if (strategy !== 'noBuy') {
+      const offers = sampleShopSlots(rng)
+        .map((id) => ({ id, price: cardPrice(id) }))
+        .sort((a, b) => a.price - b.price);
+      const appetite = strategy === 'thrifty' ? 1 : MAX_OWNED_TUNING;
+      for (const o of offers) {
+        if (owned.length >= appetite) break;
+        if (money < o.price) continue;
+        money -= o.price;
+        spent += o.price;
+        owned.push(o.id);
+      }
+    }
+    const staged = owned.length;
+    const rank = ranks[ri];
+    const pay = racePayout(rank, ri);
+    money += pay;
+    earned += pay;
+    owned = []; // every staged card is consumed on the race
+    return { round: rdef.name, rank, staged, pay, moneyAfter: money };
+  });
+  return { end: money, spent, earned, perRound };
+}
+
+const economy = (() => {
+  const strategies: EconStrategy[] = ['fullBurn', 'thrifty', 'noBuy'];
+  const out: Record<string, unknown> = {};
+  for (const strat of strategies) {
+    let endSum = 0;
+    let spentSum = 0;
+    let earnedSum = 0;
+    let bankruptRounds = 0; // rounds a full-burn player wanted a card but couldn't afford any
+    const perRoundNet: number[] = [0, 0, 0];
+    for (let s = 0; s < N; s++) {
+      const r = economySeason(4000 + s * 17, strat);
+      endSum += r.end;
+      spentSum += r.spent;
+      earnedSum += r.earned;
+      r.perRound.forEach((pr, i) => {
+        perRoundNet[i] += pr.pay;
+        if (strat === 'fullBurn' && pr.staged < MAX_OWNED_TUNING && pr.moneyAfter - pr.pay < 40) bankruptRounds++;
+      });
+    }
+    out[strat] = {
+      avgEndMoney: round(endSum / N, 0),
+      avgSpent: round(spentSum / N, 0),
+      avgEarned: round(earnedSum / N, 0),
+      avgNetPerSeason: round((earnedSum - spentSum) / N, 0),
+      avgPayoutByRound: perRoundNet.map((v) => round(v / N, 0)),
+      ...(strat === 'fullBurn' ? { underfilledRounds: round(bankruptRounds / N, 2) } : {}),
+    };
+  }
+  return out;
+})();
+
 // --- Narrated season (Stock build, one fixed seed) ----------------------------
 const seasonSeed = 0x5eed01;
 const narrated = ROUNDS.map((rdef, ri) => {
@@ -389,7 +479,8 @@ const devNarrated = (() => {
   const statsByRound = developedStatsByRound(BUILDS.Stock, seed);
   return ROUNDS.map((rdef, ri) => {
     const stats = statsByRound[ri];
-    const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, isPlayer: true };
+    const mass = loadoutToStats(BUILDS.Stock).mass;
+    const player: Entrant = { id: 'player', name: 'You', colorHex: 0x2bd9ff, stats, mass, isPlayer: true };
     const track = { ...SUNSET_DERBY, laps: rdef.laps };
     const o = observe({ track, seed, entrants: [player, ...opponents(ri, seed)] });
     return {
@@ -413,4 +504,4 @@ const playerStats = Object.fromEntries(
   }),
 );
 
-console.log(JSON.stringify({ N, playerStats, sweep, narrated, devNarrated }, null, 2));
+console.log(JSON.stringify({ N, playerStats, sweep, economy, narrated, devNarrated }, null, 2));

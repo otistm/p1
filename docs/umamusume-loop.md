@@ -24,8 +24,8 @@ lootbar, gamer.org, dtgre — 2025/2026). We borrow the *structure*, not the IP.
 
 ## How P1 adapts it
 
-- Trainee → **your kart**. Support cards → **draft cards** that improve/customize parts.
-- "Deck before run" → a **hybrid economy**: a persistent collection plus an in-run draft.
+- Trainee → **your kart**. Support cards → **tuning cards** that improve/customize the build.
+- "Deck before run" → a **shop economy**: a persistent collection topped up from an in-shop offer.
 - 70 turns/3 years → a tighter **season of training turns** across escalating cups.
 - The five stats map **1:1** to our kart ratings (see `sim-physics.md`), so training is
   legible: you can *see* a stat change how the kart drives.

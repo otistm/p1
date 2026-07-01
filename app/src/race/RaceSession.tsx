@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -7,26 +8,49 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { RaceEngine } from '@grid/sim';
+import { RaceEngine, FIXED_DT } from '@grid/sim';
 import { useGame } from '@grid/game';
 import { getAudio } from '@grid/audio';
-import type { BoardRow } from '@grid/ui';
+import type { BoardRow, TuningStatus, RaceSituation, LivePerf } from '@grid/ui';
 
 interface HudData {
   lap: number;
   laps: number;
   speedKmh: number;
+  /** Speed as a fraction of the player's own top speed (0..~1) — drives the speed FX. */
+  speedFrac: number;
   stamina: number;
   board: BoardRow[];
+  /** Player's staged tuning effects + whether each is applying right now. */
+  tuning: TuningStatus[];
+  /** Live facts that gate those effects; null when the player staged no tuning. */
+  situation: RaceSituation | null;
+  /** Live performance multipliers (tuning bag + stamina fade) for the vitals gauges. */
+  perf: LivePerf;
 }
 
 interface RaceSessionValue {
   engine: RaceEngine | null;
   running: boolean;
   countdown: string | null;
+  /** Playback rate for the deterministic clock — 1× or 2× (does not change the result). */
+  raceSpeed: number;
+  setRaceSpeed: (n: number) => void;
+  /** Fast-forward the sim to the finish and jump straight to results. */
+  skipRace: () => void;
 }
 
-const EMPTY_HUD: HudData = { lap: 0, laps: 3, speedKmh: 0, stamina: 1, board: [] };
+const EMPTY_HUD: HudData = {
+  lap: 0,
+  laps: 3,
+  speedKmh: 0,
+  speedFrac: 0,
+  stamina: 1,
+  board: [],
+  tuning: [],
+  situation: null,
+  perf: { speedFrac: 0, gripLoad: 0, topMult: 1, accelMult: 1, gripMult: 1, steerMult: 1, fade: 1 },
+};
 
 // The HUD lives in its own context, deliberately separate from the engine/running session.
 // HUD state updates ~15Hz; if it shared a context with the engine, every consumer (incl.
@@ -37,6 +61,9 @@ const RaceSessionContext = createContext<RaceSessionValue>({
   engine: null,
   running: false,
   countdown: null,
+  raceSpeed: 1,
+  setRaceSpeed: () => {},
+  skipRace: () => {},
 });
 const RaceHudContext = createContext<HudData>(EMPTY_HUD);
 
@@ -68,12 +95,47 @@ function computeHud(engine: RaceEngine): HudData {
           ? 'fin'
           : `-${Math.max(0, (leadProg - r.prog) / pace).toFixed(1)}s`,
   }));
+  // Tuning readout: the player's staged effects (deduped) + whether each is applying this tick,
+  // plus the live situational facts that trigger them. Only meaningful when tuning is staged.
+  const activeSet = new Set<string>(player.activeEffects);
+  const seen = new Set<string>();
+  const tuning: TuningStatus[] = [];
+  for (const e of player.effects) {
+    if (seen.has(e.kind)) continue;
+    seen.add(e.kind);
+    tuning.push({ kind: e.kind, active: activeSet.has(e.kind) });
+  }
+  const t = player.telemetry;
+  const situation: RaceSituation | null =
+    player.effects.length > 0
+      ? {
+          drafting: t.drafting,
+          draftDist: t.draftDist,
+          cleanAir: t.cleanAir,
+          traffic: t.traffic,
+          beingDrafted: t.beingDrafted,
+        }
+      : null;
+
+  const l = player.live;
   return {
     lap: player.lap,
     laps: engine.config.track.laps,
     speedKmh: player.speed * 3.6,
+    speedFrac: player.speed / Math.max(1, player.d.topSpeed),
     stamina: player.energy / player.d.energyMax,
     board,
+    tuning,
+    situation,
+    perf: {
+      speedFrac: l.speedFrac,
+      gripLoad: l.gripLoad,
+      topMult: l.topMult,
+      accelMult: l.accelMult,
+      gripMult: l.gripMult,
+      steerMult: l.steerMult,
+      fade: l.fade,
+    },
   };
 }
 
@@ -90,8 +152,26 @@ export function RaceSessionProvider({ children }: { children: ReactNode }) {
   const engine = useMemo(() => (raceConfig ? new RaceEngine(raceConfig) : null), [raceConfig]);
   const [running, setRunning] = useState(false);
   const [countdown, setCountdown] = useState<string | null>(null);
+  const [raceSpeed, setRaceSpeed] = useState(1);
   const [hud, setHud] = useState<HudData>(EMPTY_HUD);
   const handled = useRef(false);
+
+  // Fast-forward the SAME deterministic sim to its finish (mirrors RaceEngine.resolve), then
+  // report the result once. The result is identical to watching it play out — skip only
+  // changes how long the player waits, never who wins.
+  const skipRace = useCallback(() => {
+    if (!engine || handled.current) return;
+    handled.current = true;
+    if (!engine.started) engine.start();
+    let guard = 0;
+    while (!engine.over && guard++ < 200_000) engine.step(FIXED_DT * 8);
+    setRunning(false);
+    const audio = getAudio();
+    audio.engineOff();
+    audio.finishChord();
+    const result = engine.result();
+    if (result) finishRace(result);
+  }, [engine, finishRace]);
 
   // Countdown then go.
   useEffect(() => {
@@ -100,6 +180,7 @@ export function RaceSessionProvider({ children }: { children: ReactNode }) {
     audio.resume();
     handled.current = false;
     setRunning(false);
+    setRaceSpeed(1);
     const seq = ['3', '2', '1', 'GO!'];
     const timers: number[] = [];
     seq.forEach((label, i) => {
@@ -147,8 +228,8 @@ export function RaceSessionProvider({ children }: { children: ReactNode }) {
   }, [engine, finishRace]);
 
   const value = useMemo<RaceSessionValue>(
-    () => ({ engine, running, countdown }),
-    [engine, running, countdown],
+    () => ({ engine, running, countdown, raceSpeed, setRaceSpeed, skipRace }),
+    [engine, running, countdown, raceSpeed, skipRace],
   );
   return (
     <RaceSessionContext.Provider value={value}>

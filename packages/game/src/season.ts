@@ -1,30 +1,24 @@
 import { clamp, type KartStats, type Rng, type StatKey } from '@grid/sim';
-import { ROUNDS } from '@grid/content';
+import { TRAINING_CARDS, type Card } from '@grid/content';
 import type { SeasonState } from './types';
 
-export interface Training {
-  id: string;
-  icon: string;
-  name: string;
-  main: StatKey | null;
-  mainAmt: number;
-  splash?: StatKey;
-  splashAmt?: number;
-  restore?: number;
-  cost: number;
+export const TRAININGS_BY_ID: Record<string, Card> = Object.fromEntries(
+  TRAINING_CARDS.map((t) => [t.id, t]),
+);
+
+/**
+ * How many stat-building training plays a player may make per round. This is the hard cap
+ * that stops the free `Rest & Tune` card (0 energy, +48) from fuelling an unbounded
+ * over-training loop: Rest only refills energy to spend on these capped sessions, so career
+ * growth per round is bounded regardless of how often the player rests. Sized so a full
+ * energy bar (~3 sessions) plus a couple of rests reaches the cap — the intended arc.
+ */
+export const MAX_TRAINING_SESSIONS_PER_ROUND = 6;
+
+/** Whether the player still has stat-training sessions left this round. */
+export function trainingSessionsLeft(season: SeasonState): number {
+  return Math.max(0, MAX_TRAINING_SESSIONS_PER_ROUND - season.sessionsThisRound);
 }
-
-/** The training menu — mirrors the prototype, mapped to the five ratings. */
-export const TRAININGS: Training[] = [
-  { id: 'speed', icon: '🏁', name: 'Speed Sprints', main: 'speed', mainAmt: 11, splash: 'power', splashAmt: 3, cost: 30 },
-  { id: 'power', icon: '💪', name: 'Power Drills', main: 'power', mainAmt: 11, splash: 'guts', splashAmt: 3, cost: 30 },
-  { id: 'corner', icon: '🌀', name: 'Slalom Lab', main: 'wit', mainAmt: 11, splash: 'speed', splashAmt: 3, cost: 28 },
-  { id: 'endure', icon: '🫀', name: 'Endurance Laps', main: 'stamina', mainAmt: 11, splash: 'guts', splashAmt: 3, cost: 32 },
-  { id: 'grit', icon: '🔥', name: 'Grit Session', main: 'guts', mainAmt: 11, splash: 'stamina', splashAmt: 3, cost: 30 },
-  { id: 'rest', icon: '😴', name: 'Rest & Tune', main: null, mainAmt: 0, restore: 48, cost: 0 },
-];
-
-export const TRAININGS_BY_ID: Record<string, Training> = Object.fromEntries(TRAININGS.map((t) => [t.id, t]));
 
 const EVENTS: { t: string; apply: (s: SeasonState) => void }[] = [
   { t: 'A tailwind on the back straight — the team logs a setup tweak. +3 Speed', apply: (s) => bump(s, 'speed', 3) },
@@ -38,31 +32,41 @@ function bump(s: SeasonState, k: StatKey, amt: number): void {
   s.trainedStats[k] += amt;
 }
 
+const STAT_NAME: Record<StatKey, string> = {
+  speed: 'Speed',
+  stamina: 'Stamina',
+  power: 'Power',
+  guts: 'Guts',
+  wit: 'Wit',
+};
+
 const zeroStats = (): KartStats => ({ speed: 0, stamina: 0, power: 0, guts: 0, wit: 0 });
 
 export function initialSeason(): SeasonState {
   return {
     round: 0,
-    turnsLeft: ROUNDS[0].turns,
     energy: 100,
+    sessionsThisRound: 0,
     trainedStats: zeroStats(),
-    draftedCardIds: [],
+    stagedTuningCardIds: [],
     history: [],
-    pendingDraft: null,
-    draftPicksRemaining: 0,
   };
 }
 
-/** Configure the season for a given round (keeps career stats, refreshes condition). */
+/** Configure the season for a given round (keeps career stats, refreshes condition + budget). */
 export function beginRound(season: SeasonState, roundIdx: number): SeasonState {
-  const round = ROUNDS[roundIdx];
-  return { ...season, round: roundIdx, turnsLeft: round.turns, energy: 100 };
+  return { ...season, round: roundIdx, energy: 100, sessionsThisRound: 0, stagedTuningCardIds: [] };
 }
 
-/** Preview the main-stat gain for a training given current condition. */
-export function projectedGain(t: Training, energy: number): number {
-  if (!t.main) return 0;
+/** Preview the main-stat gain for a training card given current condition. */
+export function projectedGain(t: Card, energy: number): number {
+  if (!t.mainStat || !t.mainAmt) return 0;
   return Math.round(t.mainAmt * (0.5 + (0.5 * energy) / 100));
+}
+
+/** Whether the player currently has enough energy to play this training card. */
+export function canAffordTraining(t: Card, energy: number): boolean {
+  return energy >= (t.energyCost ?? 0);
 }
 
 export interface TrainingOutcome {
@@ -71,47 +75,63 @@ export interface TrainingOutcome {
   toast?: string;
 }
 
-/** Apply a training action. Pure given `rng`; returns a new season + UI feedback. */
+/**
+ * Apply a training action. Energy is the only gate — a card that costs more than the
+ * player's current energy simply can't be played (see docs/training-tuning-cards.md).
+ * Pure given `rng`; returns a new season + UI feedback.
+ */
 export function applyTraining(season: SeasonState, trainingId: string, rng: Rng): TrainingOutcome {
-  if (season.turnsLeft <= 0) return { season, gains: {} };
   const t = TRAININGS_BY_ID[trainingId];
   if (!t) return { season, gains: {} };
+  if (!canAffordTraining(t, season.energy)) {
+    return { season, gains: {}, toast: 'Not enough energy for that.' };
+  }
+  // A stat-building session (anything that isn't a pure energy restore) is capped per round.
+  const isStatSession = !t.restoreEnergy;
+  if (isStatSession && season.sessionsThisRound >= MAX_TRAINING_SESSIONS_PER_ROUND) {
+    return { season, gains: {}, toast: 'Training done for this round — head to the race.' };
+  }
 
   const s: SeasonState = {
     ...season,
     trainedStats: { ...season.trainedStats },
     history: season.history,
   };
+  if (isStatSession) s.sessionsThisRound += 1;
   const gains: Partial<KartStats> = {};
-  let toast: string | undefined;
+  // Always tell the player what just happened — every successful play gives feedback.
+  let toast = `Played ${t.name}.`;
 
-  if (t.id === 'rest') {
-    s.energy = clamp(s.energy + (t.restore ?? 0), 0, 100);
-  } else if (t.main) {
+  if (t.restoreEnergy) {
+    const before = s.energy;
+    s.energy = clamp(s.energy + t.restoreEnergy, 0, 100);
+    toast = `${t.name}: +${Math.round(s.energy - before)} Energy`;
+  } else if (t.mainStat) {
     const fail = s.energy < 20 && rng() < 0.4;
     const scale = 0.5 + (0.5 * s.energy) / 100;
-    let amt = t.mainAmt * scale;
+    let amt = (t.mainAmt ?? 0) * scale;
     if (fail) {
       amt *= 0.4;
       s.energy = clamp(s.energy - 10, 0, 100);
-      toast = 'Rough session — pushed too hard while spent.';
     }
-    s.trainedStats[t.main] += amt;
-    gains[t.main] = amt;
-    if (t.splash && t.splashAmt) {
-      s.trainedStats[t.splash] += t.splashAmt;
-      gains[t.splash] = t.splashAmt;
+    s.trainedStats[t.mainStat] += amt;
+    gains[t.mainStat] = amt;
+    let gainText = `+${Math.round(amt)} ${STAT_NAME[t.mainStat]}`;
+    if (t.splashStat && t.splashAmt) {
+      s.trainedStats[t.splashStat] += t.splashAmt;
+      gains[t.splashStat] = t.splashAmt;
+      gainText += `, +${t.splashAmt} ${STAT_NAME[t.splashStat]}`;
     }
-    s.energy = clamp(s.energy - t.cost, 0, 100);
+    s.energy = clamp(s.energy - (t.energyCost ?? 0), 0, 100);
+    toast = fail ? `${t.name}: rough session, only ${gainText} (too tired)` : `${t.name}: ${gainText}`;
 
-    // Occasional flavor event.
+    // Occasional flavor event, layered onto the base feedback.
     if (rng() < 0.22) {
       const e = EVENTS[Math.floor(rng() * EVENTS.length)];
       e.apply(s);
-      toast = e.t;
+      toast += ` — ${e.t}`;
     }
   }
 
-  s.turnsLeft -= 1;
   return { season: s, gains, toast };
 }

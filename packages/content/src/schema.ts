@@ -37,24 +37,62 @@ export const CardEffectSchema = z.object({
 });
 export type CardEffect = z.infer<typeof CardEffectSchema>;
 
-export const CardSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  rarity: z.enum(RARITIES),
-  theme: z.enum(STAT_KEYS),
-  mods: PartialStatsSchema,
-  /** Optional triggered in-sim effect (see docs/cards-proximity-conditional.md). */
-  effect: CardEffectSchema.optional(),
-  /** Human-readable trigger condition shown in the draft UI. */
-  trigger: z.string().optional(),
-  /** Human-readable effect description shown in the draft UI. */
-  effectText: z.string().optional(),
-  /** Short archetype tag (e.g. "Traffic", "Leader") for the draft UI. */
-  archetype: z.string().optional(),
-  /** Optional legacy descriptive special. */
-  special: z.string().optional(),
-  flavor: z.string(),
-});
+/**
+ * The two kinds of card in the one unified database (see docs/training-tuning-cards.md).
+ * `training` cards are permanent, always-in-hand, energy-gated stat-growth actions.
+ * `tuning` cards are bought in the shop, dragged onto the kart to stage for one race, and
+ * consumed when that race resolves.
+ */
+export const CARD_KINDS = ['training', 'tuning'] as const;
+export type CardKind = (typeof CARD_KINDS)[number];
+
+export const CardSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.enum(CARD_KINDS),
+    name: z.string().min(1),
+    flavor: z.string(),
+    /** Emoji shown on a training card's face. */
+    icon: z.string().optional(),
+
+    // --- tuning-only fields ---
+    rarity: z.enum(RARITIES).optional(),
+    theme: z.enum(STAT_KEYS).optional(),
+    /** Flat stat modifiers applied while a tuning card is staged for a race. */
+    mods: PartialStatsSchema.optional(),
+    /** Optional triggered in-sim effect (see docs/cards-proximity-conditional.md). */
+    effect: CardEffectSchema.optional(),
+    /** Human-readable trigger condition shown in the shop/hand UI. */
+    trigger: z.string().optional(),
+    /** Human-readable effect description shown in the shop/hand UI. */
+    effectText: z.string().optional(),
+    /** Short archetype tag (e.g. "Traffic", "Leader") for the shop/hand UI. */
+    archetype: z.string().optional(),
+    /** Optional legacy descriptive special. */
+    special: z.string().optional(),
+
+    // --- training-only fields ---
+    /** Energy spent to play this training card (0 for the free `rest` card). */
+    energyCost: z.number().optional(),
+    mainStat: z.enum(STAT_KEYS).nullable().optional(),
+    mainAmt: z.number().optional(),
+    splashStat: z.enum(STAT_KEYS).optional(),
+    splashAmt: z.number().optional(),
+    /** Energy restored (rest cards only). */
+    restoreEnergy: z.number().optional(),
+  })
+  .superRefine((card, ctx) => {
+    if (card.kind === 'tuning') {
+      if (!card.rarity) {
+        ctx.addIssue({ code: 'custom', message: 'tuning cards require a rarity' });
+      }
+      if (!card.mods && !card.effect) {
+        ctx.addIssue({ code: 'custom', message: 'tuning cards require mods and/or an effect' });
+      }
+    } else if (card.energyCost === undefined) {
+      ctx.addIssue({ code: 'custom', message: 'training cards require energyCost' });
+    }
+  });
 export type Card = z.infer<typeof CardSchema>;
 
 export const CosmeticSchema = z.object({

@@ -1,4 +1,16 @@
 import { hexToCss } from '../theme';
+import { SpeedFx } from '../components/SpeedFx';
+import { RaceVitals, type TuningStatus, type RaceSituation, type LivePerf } from '../components/RaceVitals';
+
+const NEUTRAL_PERF: LivePerf = {
+  speedFrac: 0,
+  gripLoad: 0,
+  topMult: 1,
+  accelMult: 1,
+  gripMult: 1,
+  steerMult: 1,
+  fade: 1,
+};
 
 export interface BoardRow {
   pos: number;
@@ -12,14 +24,66 @@ interface RaceHudProps {
   lap: number;
   laps: number;
   speedKmh: number;
+  /** Player speed as a fraction of their top speed (0..~1); drives the speed FX. */
+  speedFrac?: number;
   stamina: number;
   board: BoardRow[];
   countdown?: string | null;
+  /** Current playback rate (1 or 2); when set with handlers, the race controls render. */
+  raceSpeed?: number;
+  onCycleSpeed?: () => void;
+  onSkip?: () => void;
+  showControls?: boolean;
+  /** Player's staged tuning effects + their live on/off state (drives the TUNING readout). */
+  tuning?: TuningStatus[];
+  /** Live situational facts that gate those effects; null when no tuning is staged. */
+  situation?: RaceSituation | null;
+  /** Live performance multipliers (tuning bag + stamina fade) for the vitals gauges. */
+  perf?: LivePerf;
 }
 
-export function RaceHud({ lap, laps, speedKmh, stamina, board, countdown }: RaceHudProps) {
+export function RaceHud({
+  lap,
+  laps,
+  speedKmh,
+  speedFrac = 0,
+  stamina,
+  board,
+  countdown,
+  raceSpeed = 1,
+  onCycleSpeed,
+  onSkip,
+  showControls,
+  tuning = [],
+  situation = null,
+  perf = NEUTRAL_PERF,
+}: RaceHudProps) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 8, pointerEvents: 'none', fontFamily: 'Inter' }}>
+      {/* Speed cues sit behind the HUD readouts (first child = painted under later siblings). */}
+      {!countdown && <SpeedFx frac={speedFrac} />}
+
+      {/* Race controls — the one bit of agency in the auto-race: change playback speed or skip
+          straight to the result (both keep the deterministic outcome). Top-right, clickable. */}
+      {showControls && onCycleSpeed && onSkip && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            display: 'flex',
+            gap: 8,
+            pointerEvents: 'auto',
+          }}
+        >
+          <button className="btn ghost sm" style={{ minWidth: 52 }} onClick={onCycleSpeed}>
+            {raceSpeed}&times;
+          </button>
+          <button className="btn ghost sm" onClick={onSkip}>
+            Skip &rarr;
+          </button>
+        </div>
+      )}
       <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
         <div className="display" style={{ fontSize: 34, lineHeight: 0.9 }}>
           {Math.min(lap + 1, laps)}/{laps}
@@ -78,33 +142,9 @@ export function RaceHud({ lap, laps, speedKmh, stamina, board, countdown }: Race
         ))}
       </div>
 
-      <div style={{ position: 'absolute', bottom: 24, left: 20, width: 200 }}>
-        <div style={{ fontSize: 10, letterSpacing: 2, color: 'var(--muted)', fontWeight: 700, marginBottom: 5 }}>
-          STAMINA
-        </div>
-        <div
-          style={{
-            height: 12,
-            background: 'rgba(20,23,31,.7)',
-            border: '1px solid var(--line)',
-            borderRadius: 7,
-            overflow: 'hidden',
-          }}
-        >
-          <i
-            style={{
-              display: 'block',
-              height: '100%',
-              width: `${Math.max(0, Math.min(100, stamina * 100))}%`,
-              background:
-                stamina < 0.25
-                  ? 'linear-gradient(90deg,#ff8a4b,var(--red))'
-                  : 'linear-gradient(90deg,#4ee08a,#2bd9ff)',
-              transition: 'width .2s',
-            }}
-          />
-        </div>
-      </div>
+      {!countdown && (
+        <RaceVitals stamina={stamina} speedKmh={speedKmh} perf={perf} tuning={tuning} situation={situation} />
+      )}
 
       <div style={{ position: 'absolute', bottom: 20, right: 20, textAlign: 'right' }}>
         <div className="display" style={{ fontSize: 44, lineHeight: 0.85 }}>

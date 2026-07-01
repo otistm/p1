@@ -148,6 +148,10 @@ const p = (e: CardEffect, key: string, dflt: number): number => e.params?.[key] 
 /**
  * Evaluate all of a kart's effects for this tick. Mutates `state` (draft timer) and returns the
  * accumulated modifier bag. Pure given (effects, ctx, state, dt, rng).
+ *
+ * `fired` is an optional render-only sink: when provided, the kind of every effect that actually
+ * *applied* this tick is pushed onto it. It never influences the sim (determinism is untouched);
+ * the renderer reads it purely to pop "tuning procced" feedback.
  */
 export function evaluateEffects(
   effects: CardEffect[],
@@ -155,6 +159,7 @@ export function evaluateEffects(
   state: EffectState,
   dt: number,
   _rng: Rng,
+  fired?: CardEffectKind[],
 ): ModifierBag {
   const bag = defaultBag();
   if (effects.length === 0) return bag;
@@ -178,6 +183,7 @@ export function evaluateEffects(
         const minSec = p(e, 'minDraftSeconds', 1.5);
         if (!ctx.inCorner && state.draftTargetId && state.draftSeconds >= minSec) {
           bag.accelMult *= 1 + p(e, 'accelPct', 15) / 100;
+          fired?.push(e.kind);
         }
         break;
       }
@@ -186,6 +192,7 @@ export function evaluateEffects(
           bag.latGripMult *= 1 + p(e, 'exitGripPct', 15) / 100;
           // Take the outer line (opposite the corner's inside).
           bag.lateralBias += -ctx.cornerInsideSign * p(e, 'outerMeters', 3);
+          fired?.push(e.kind);
         }
         break;
       }
@@ -196,6 +203,7 @@ export function evaluateEffects(
           bag.accelMult *= sp;
           bag.steerAuthorityMult *= 1 - p(e, 'driftPenaltyPct', 15) / 100;
           bag.lateralBias += ctx.openSide * 3;
+          fired?.push(e.kind);
         }
         break;
       }
@@ -203,6 +211,7 @@ export function evaluateEffects(
         if (ctx.inCorner && ctx.sideNeighborSign !== 0) {
           bag.impactForceMult *= 1 + p(e, 'impactPct', 25) / 100;
           bag.lateralBias += ctx.sideNeighborSign * p(e, 'leanMeters', 1);
+          fired?.push(e.kind);
         }
         break;
       }
@@ -210,6 +219,7 @@ export function evaluateEffects(
         if (ctx.rank === 1 && ctx.cleanAirAhead) {
           bag.topSpeedMult *= 1 + p(e, 'topPct', 8) / 100;
           bag.latGripMult *= 1 - p(e, 'stabilityPct', 5) / 100;
+          fired?.push(e.kind);
         }
         break;
       }
@@ -218,6 +228,7 @@ export function evaluateEffects(
         if (ctx.lastLap && ctx.rank >= 4 && ctx.draftTargetId && ctx.draftDistance <= range) {
           bag.topSpeedMult *= 1 + p(e, 'topPct', 12) / 100;
           bag.accelMult *= 1 + p(e, 'topPct', 12) / 200;
+          fired?.push(e.kind);
         }
         break;
       }
@@ -225,6 +236,7 @@ export function evaluateEffects(
         if (ctx.rank <= 3 && ctx.beingDrafted) {
           bag.collisionRadiusMult *= 1 + p(e, 'boxPct', 20) / 100;
           bag.centerPull = Math.max(bag.centerPull, p(e, 'centerPull', 0.6));
+          fired?.push(e.kind);
         }
         break;
       }

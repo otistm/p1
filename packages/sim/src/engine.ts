@@ -38,7 +38,7 @@ export class RaceEngine implements IRaceEngine {
     // Each racer gets a dedicated seeded RNG for effect rolls (drawn only on fixed sub-steps),
     // salted by index so identical decks still diverge and frame batching stays invariant.
     this.racers = config.entrants.map(
-      (e, i) => new Racer(e, derive(e.stats), makeRng(hashSeed(config.seed, i, 0xeffec7))),
+      (e, i) => new Racer(e, derive(e.stats, e.mass), makeRng(hashSeed(config.seed, i, 0xeffec7))),
     );
 
     // Grid: staggered rows of two behind the line, small lateral spread.
@@ -143,6 +143,9 @@ export class RaceEngine implements IRaceEngine {
         rank: r.rank,
         finishTime: r.finishTime,
         finished: r.finished,
+        lapSplits: [...r.lapSplits],
+        lapStats: r.lapStats.map((s) => ({ ...s })),
+        laps: this.laps,
       }));
     return { order, seed: this.config.seed };
   }

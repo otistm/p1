@@ -4,21 +4,45 @@
   --panel2: #252b38;
   --line: #333b4a;
   --ink: #eef1f6;
-  --muted: #8b93a3;
+  /* Lightened from #8b93a3 (~4.9:1) to reach ~7:1 on panels, so small/low-weight
+     helper text clears WCAG's stricter target (see docs/game-review.md §5). */
+  --muted: #a6afc0;
   --orange: #ff6a2b;
   --cyan: #2bd9ff;
   --green: #4ee08a;
   --red: #ff4d6d;
   --purple: #b07bff;
+  --amber: #ffb648;
   --speed: #2bd9ff;
   --stamina: #4ee08a;
   --power: #ff6a2b;
   --guts: #ff4d6d;
   --wit: #b07bff;
+
+  /* Type scale — one source of truth, in rem so text honours browser zoom.
+     Modular ~1.25 ratio on a 16px base (docs/game-review.md §5). The label floor
+     (--fs-label, 12px) is the smallest size any real UI text should use. */
+  --fs-label: 0.75rem; /* 12px — eyebrows, chips, captions (floor) */
+  --fs-body: 0.875rem; /* 14px — secondary body / helper copy */
+  --fs-base: 1rem; /* 16px — body */
+  --fs-cta: 1.25rem; /* 20px — the one primary-CTA size */
+  --fs-h4: 1.25rem; /* 20px */
+  --fs-h3: 1.625rem; /* 26px — panel/inspector titles */
+  --fs-h2: 2rem; /* 32px — screen headings */
+  --fs-h1: 2.5rem; /* 40px — results / hero-adjacent */
+  --fs-hero: clamp(2.875rem, 9vw, 5.25rem); /* title logo */
+
+  /* One shared "dimmed/disabled" opacity for every control (was 0.35–0.45 ad hoc). */
+  --disabled-opacity: 0.45;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  /* Anchor rem to the browser's base so the whole type scale respects user zoom. */
+  font-size: 100%;
 }
 
 html,
@@ -76,7 +100,7 @@ canvas#scene {
   border: none;
   border-radius: 12px;
   padding: 14px 26px;
-  font-size: 20px;
+  font-size: var(--fs-cta);
   color: #101218;
   background: var(--orange);
   transition:
@@ -100,14 +124,21 @@ canvas#scene {
 .btn.ghost:hover {
   background: var(--panel2);
 }
+/* Secondary/compact action — the one smaller button size (replaces ad-hoc inline
+   font-size/padding overrides on ghost buttons). Text stays >= the label floor. */
+.btn.sm {
+  font-size: var(--fs-body);
+  padding: 9px 16px;
+  border-radius: 10px;
+}
 .btn:disabled {
-  opacity: 0.4;
+  opacity: var(--disabled-opacity);
   cursor: not-allowed;
   filter: none;
 }
 
 .eyebrow {
-  font-size: 11px;
+  font-size: var(--fs-label);
   letter-spacing: 2.5px;
   color: var(--muted);
   text-transform: uppercase;
@@ -134,8 +165,67 @@ canvas#scene {
   }
 }
 
+/* One-shot particle used by CardPlayFx: fly outward from the kart anchor and fade. The
+   anchor div is not translated, so each particle centers itself then flings to (--dx,--dy). */
+@keyframes cardburst {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--dx, 0), var(--dy, 0)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+/* Race speed lines: streaks rush outward from the vanishing point and fade, looped. The
+   parent layer's opacity (set inline from the player's speed) gates how strong this reads. */
+@keyframes speedrush {
+  0% {
+    transform: scale(1);
+    opacity: 0.15;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+.speedrush {
+  animation: speedrush 0.6s linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Tuning-proc chip: rises off the kart and fades. Parent removes it when the animation ends. */
+@keyframes procfloat {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20%) scale(0.9);
+  }
+  16% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -170%) scale(1);
+  }
+}
+.procfloat {
+  animation: procfloat 1.15s ease-out forwards;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .float {
+    animation: none;
+  }
+  .speedrush {
+    animation: none;
+  }
+  .procfloat {
     animation: none;
   }
   * {
