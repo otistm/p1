@@ -3,11 +3,13 @@ import { DEV_NOTES, DEV_BUILD } from '../devNotes';
 
 /**
  * A small "Dev Notes" tag pinned to the top-right of the title screen. Clicking it opens a
- * changelist panel (newest first) sourced from `devNotes.ts`, which we append to on every
- * commit + push. Self-contained (own open state + click-away backdrop); purely presentational.
+ * scrollable changelist (newest first) sourced from `devNotes.ts`. Each commit + push prepends a
+ * new entry — older builds stay in the list so testers can scroll back through updates.
  */
 export function DevNotes() {
   const [open, setOpen] = useState(false);
+  const count = DEV_NOTES.length;
+
   return (
     <>
       <button
@@ -43,31 +45,48 @@ export function DevNotes() {
 
       {open && (
         <>
-          {/* Click-away backdrop. */}
           <div
             onClick={() => setOpen(false)}
             style={{ position: 'fixed', inset: 0, zIndex: 29 }}
           />
           <div
+            role="dialog"
+            aria-label="Dev Notes changelist"
             style={{
               position: 'fixed',
               top: 54,
               right: 16,
               zIndex: 31,
-              width: 'min(340px,92vw)',
+              width: 'min(360px,92vw)',
               maxHeight: '72vh',
-              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
               background: 'rgba(16,19,26,.96)',
               border: '1px solid var(--line)',
               borderRadius: 12,
-              padding: '14px 16px',
               backdropFilter: 'blur(8px)',
               boxShadow: '0 12px 40px rgba(0,0,0,.5)',
+              overflow: 'hidden',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div className="display" style={{ fontSize: 18 }}>
-                Dev Notes
+            {/* Header stays pinned while the list scrolls. */}
+            <div
+              style={{
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 16px 10px',
+                borderBottom: '1px solid var(--line)',
+              }}
+            >
+              <div>
+                <div className="display" style={{ fontSize: 18 }}>
+                  Dev Notes
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  {count} update{count === 1 ? '' : 's'} · scroll for older builds
+                </div>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -78,21 +97,57 @@ export function DevNotes() {
               </button>
             </div>
 
-            {DEV_NOTES.map((note) => (
-              <div key={note.date} style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--cyan)', fontWeight: 700 }}>
-                    {note.date}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{note.title}</span>
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
-                  {note.changes.map((c, i) => (
-                    <li key={i}>{c}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '10px 16px 14px',
+                overscrollBehavior: 'contain',
+              }}
+            >
+              {DEV_NOTES.map((note, idx) => (
+                <article
+                  key={note.id}
+                  style={{
+                    marginBottom: idx < count - 1 ? 0 : 0,
+                    paddingBottom: idx < count - 1 ? 14 : 0,
+                    marginTop: idx > 0 ? 14 : 0,
+                    paddingTop: idx > 0 ? 14 : 0,
+                    borderTop: idx > 0 ? '1px solid var(--line)' : undefined,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+                    {idx === 0 && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 800,
+                          letterSpacing: 0.6,
+                          textTransform: 'uppercase',
+                          color: 'var(--cyan)',
+                          background: 'rgba(43,217,255,.12)',
+                          borderRadius: 4,
+                          padding: '2px 6px',
+                        }}
+                      >
+                        Latest
+                      </span>
+                    )}
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--cyan)', fontWeight: 700 }}>
+                      {note.date}
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{note.title}</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--muted)', fontSize: 12, lineHeight: 1.55 }}>
+                    {note.changes.map((c, i) => (
+                      <li key={i} style={{ marginBottom: 3 }}>
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
           </div>
         </>
       )}

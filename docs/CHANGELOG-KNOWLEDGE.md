@@ -2,6 +2,11 @@
 
 Relay log — what changed in `docs/`, so the team stays in sync. Newest at top.
 
+- **2026-07-01 (Dev Notes accumulate + scroll)** — Dev Notes now **prepend** a new entry on every push
+  (never merge into the previous one). Each `DevNote` has a unique `id`; the panel keeps a pinned
+  header ("N updates · scroll for older builds") and a scrollable body with dividers + a "Latest"
+  badge on the top entry. Rule `.cursor/rules/dev-notes.mdc` updated to match.
+
 - **2026-07-01 (Summit Pass → switchback route)** — Reshaped Summit Pass into a portrait switchback
   cascade (per a reference layout): six vertical passes linked by five 180° hairpins, closed by a
   bottom sweep. Authored with a new `Turtle` path-builder in `packages/content/src/tracks.ts`
